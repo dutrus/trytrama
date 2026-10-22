@@ -1,0 +1,6 @@
+{
+  "name": "@mocks/provider-c",
+  "private": true,
+  "type": "module",
+  "dependencies": { "@mocks/kit": "workspace:*" }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "@trama/api",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "bun --watch src/index.ts" }
+}

@@ -1,0 +1,31 @@
+{
+  "name": "trama-search-takehome",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "providers/*",
+    "packages/*"
+  ],
+  "engines": {
+    "bun": ">=1.2.0"
+  },
+  "scripts": {
+    "dev": "bun scripts/dev.ts",
+    "provider:a": "bun providers/a/src/server.ts",
+    "provider:b": "bun providers/b/src/server.ts",
+    "provider:c": "bun providers/c/src/server.ts",
+    "api": "bun --watch apps/api/src/index.ts",
+    "agent": "bun apps/agent/src/index.ts",
+    "load": "bun scripts/load.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.6.0"
+  },
+  "dependencies": {
+    "@mocks/kit": "workspace:*"
+  }
+}

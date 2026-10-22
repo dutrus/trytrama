@@ -1,0 +1,5 @@
+{
+  "name": "@trama/agent",
+  "private": true,
+  "type": "module"
+}

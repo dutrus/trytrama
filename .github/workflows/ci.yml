@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.x
+      - run: bun install --frozen-lockfile
+      - run: bun typecheck
+      - run: bun test
+
+  load:
+    runs-on: ubuntu-latest
+    env:
+      CHAOS_SEED: ci
+      LOAD_SEED: ci
+      LOG: "off"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.x
+      - run: bun install --frozen-lockfile
+      - name: Start providers and API
+        run: |
+          bun dev > dev.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:3000/health && break; sleep 1; done
+      - name: Load test
+        shell: bash
+        run: bun run load --requests 300 --concurrency 10 | tee load.txt
+      - name: Summary
+        if: always()
+        run: |
+          { echo '### Load test'; echo '```'; cat load.txt 2>/dev/null; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Server logs on failure
+        if: failure()
+        run: tail -n 200 dev.log

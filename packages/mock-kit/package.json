@@ -1,0 +1,6 @@
+{
+  "name": "@mocks/kit",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" }
+}
