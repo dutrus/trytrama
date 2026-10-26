@@ -6,7 +6,7 @@ on:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubicloud-standard-2
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -17,7 +17,7 @@ jobs:
       - run: bun test
 
   load:
-    runs-on: ubuntu-latest
+    runs-on: ubicloud-standard-2
     env:
       CHAOS_SEED: ci
       LOAD_SEED: ci
