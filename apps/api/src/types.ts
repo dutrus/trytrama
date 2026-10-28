@@ -73,6 +73,31 @@ export interface SearchOptions {
   onRetry?: (info: { attempt: number; reason: string }) => void;
 }
 
+/** A provider failure the orchestrator can report as a status. */
+export class ProviderError extends Error {
+  constructor(
+    readonly provider: ProviderId,
+    readonly status: "error" | "rate_limited",
+    message: string,
+    options?: { cause?: unknown },
+  ) {
+    super(`provider ${provider}: ${message}`, options);
+    this.name = "ProviderError";
+  }
+}
+
+/** The provider failed midway (e.g. a later page), but these hotels did arrive. */
+export class PartialResultError extends Error {
+  constructor(
+    readonly provider: ProviderId,
+    readonly hotels: ProviderHotel[],
+    cause: unknown,
+  ) {
+    super(`provider ${provider}: incomplete results (${hotels.length} hotels)`, { cause });
+    this.name = "PartialResultError";
+  }
+}
+
 export interface ProviderAdapter {
   id: ProviderId;
   search(params: SearchParams, opts: SearchOptions): Promise<ProviderHotel[]>;
