@@ -1,7 +1,5 @@
 # AI log
 
-# AI log
-
 Using AI is allowed and expected. We care about **how** you use it, not whether you do.
 
 You can paste full transcripts (or links), or summarize each session using the format below.
