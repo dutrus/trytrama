@@ -74,6 +74,8 @@ El adaptador es la frontera. Llama al proveedor, parsea su formato y devuelve ho
 
 Para sumar un cuarto proveedor: un archivo con su adaptador y registrarlo en la lista de proveedores. El resto del sistema no cambia.
 
+**C habla XML** y lo leo con un parser propio de unas 30 líneas (expresiones regulares sobre elementos y atributos, más las entidades XML como `&amp;`) en vez de una dependencia como `fast-xml-parser`. La respuesta de C es plana y casi todo viene en atributos, así que una librería sumaba peso sin resolver nada que esto no cubra. No soporta CDATA, comentarios ni prefijos de namespace: si C empezara a usarlos, el adaptador no reconoce la respuesta y falla con error, en vez de devolver datos inventados.
+
 ## Latency, streaming and caching
 
 <!-- How do you get the first event out fast with providers that take 3 s? When do you send `done`?
@@ -81,6 +83,8 @@ Para sumar un cuarto proveedor: un archivo con su adaptador y registrarlo en la 
      Paste your `bun run load` results. -->
 
 Los tres proveedores se consultan en paralelo y cada resultado sale por el stream apenas llega. A responde en 150 a 400 ms, así que el primer evento sale rápido sin esperar a B ni a C.
+
+B es el más lento: cada página tarda de 0,8 a 2,5 s y van una tras otra, así que con dos páginas puede llegar a unos 5 s. Si además una página necesita el segundo pedido, puede vencer el tope y B queda incompleto. C pasa por un limitador propio de 5 pedidos por segundo con ráfaga de 4, no de 5 como el servidor: el primer pedido también abre la conexión y le llega a C más tarde de lo que lo contamos, y con ráfaga de 5 el sexto pedido llegaba antes de tiempo y recibía un 429. Con ráfaga de 4 queda un turno de margen sin bajar la tasa.
 
 **Cuándo mando `done`:** espero hasta un tope de unos 5,5 s (PENDIENTE confirmar con `bun run load`). Prioricé completitud sobre rapidez: una agente pierde más si se pierde la mejor tarifa que si espera un poco más, y mientras tanto ya ve resultados y avisos de qué falta. Descarté un tope de 1,5 s: sería más rápido, pero casi siempre perdería a C.
 
@@ -99,7 +103,7 @@ Los tres proveedores se consultan en paralelo y cada resultado sale por el strea
 
 Cada proveedor falla por separado y ninguna falla tumba la búsqueda.
 - **A:** un reintento ante un 500.
-- **B:** el 5% de las veces nunca responde. Reintenta una vez por detrás mientras el stream sigue abierto.
+- **B:** el 5% de las veces nunca responde. Si un pedido (una página o la cotización) no contesta en 2,6 s, que es el máximo normal de B, lanzo un segundo pedido igual sin cancelar el primero y uso el que llegue antes; el cliente ve `retrying`. Además B pagina de a 20 aunque se pida `limite=50`, y casi todos los destinos tienen dos páginas: si una página intermedia falla, o vence el tope entre páginas, el adaptador devuelve los hoteles que ya llegaron marcados como incompletos (`PartialResultError`) en vez de descartarlos.
 - **C:** respeta `Retry-After` si cabe dentro del tope; si no, informa `rate_limited`.
 
 El cliente ve un `provider_status` por proveedor (`ok`, `retrying`, `timeout`, `error`, `rate_limited`) y el `done` resume qué faltó y por qué. Reintentar es seguro porque una búsqueda no cambia nada en el proveedor.
