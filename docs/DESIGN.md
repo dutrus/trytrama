@@ -37,7 +37,7 @@ Cliente (agente de viajes o agente de IA)
      taxes, board type, cancellation/refundability?
      What events does /search stream, and what does a client do with each one? -->
 
-Un **hotel** tiene id propio y estable, nombre, estrellas, dirección, coordenadas y una lista de ofertas. Estrellas y coordenadas pueden ser `null`: A omite las estrellas en algunos hoteles (su manual dice que son obligatorias) y C no trae coordenadas. Prefiero un `null` explícito a inventar un valor.
+Un **hotel** tiene id propio, nombre, estrellas, dirección, coordenadas y una lista de ofertas. Estrellas y coordenadas pueden ser `null`: A omite las estrellas en algunos hoteles (su manual dice que son obligatorias) y C no trae coordenadas. Prefiero un `null` explícito a inventar un valor. El id es estable dentro de una búsqueda, no entre búsquedas: sale del primer proveedor que trae el hotel, así que el mismo hotel puede ser `A-…` en una búsqueda y `C-…` en otra si A falla o tarda más.
 
 Una **oferta** tiene proveedor, tipo de habitación, nombre de la habitación, régimen (RO, BB, HB, FB, AI), capacidad, reembolsable (`true`, `false` o `null` si el proveedor no lo informó) y precio total en USD por toda la estadía, con impuestos incluidos. El tipo de habitación (`roomType`) es un código común: SGL, DBL, TWN, TPL, FAM o STE. Los tres proveedores usan ese mismo conjunto (A como prefijo de `roomCode`, B en `codigo_habitacion`, C en `room`); lo verifiqué con datos reales, y si llega otro código queda `null`. El nombre (`roomName`) se guarda tal cual lo manda cada proveedor, porque viene en tres estilos: inglés en A ("Twin Standard - Bed & breakfast"), español en B ("Doble twin") y solo el código en C ("TWN").
 
@@ -205,6 +205,7 @@ Un 400 de la API vuelve al modelo como error de la herramienta; si la API no est
 - **Confirmación de precio al reservar:** el precio mostrado es indicativo.
 - **Dedup perfecto:** un dedup perfecto no está garantizado con proveedores reales; el 0 de errores medido es optimista por lo limpio del simulador.
 - **Nombres abreviados de C:** cada fila muestra el nombre del proveedor que la creó, así que un hotel que solo tiene C, o que C trajo primero, aparece como "HTL CERRO OTTO" o "BTQ HTL VIRREYES". Mejoraría preferir el nombre de A o B cuando llegan después, o embellecer los de C (expandir abreviaturas, mayúsculas y minúsculas).
+- **Id de hotel estable entre búsquedas:** hoy sale del primer proveedor que trae el hotel. Un id derivado del nombre normalizado más calle y número sería el mismo en todas las búsquedas, sin importar quién conteste primero.
 - **Evento para fusionar filas ya enviadas:** resolvería el empate por orden de llegada (ver "Dónde se equivoca"), a costa de que el cliente tenga que poder unir o quitar filas.
 - **Subir el tope del `done`:** recuperaría parte de las búsquedas en que B queda incompleto, a costa de que todas las búsquedas nuevas en que B tarda esperen más.
 - **Pedir las páginas de B en paralelo:** bajaría el tiempo de B, pero hoy no se puede, porque el cursor es opaco y cada página necesita el cursor de la anterior.

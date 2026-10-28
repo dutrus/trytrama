@@ -64,7 +64,7 @@ export interface ProviderHotel {
 
 /** A hotel after dedup: one entry, offers from every provider that returned it. */
 export interface Hotel {
-  /** Our own id, stable across searches. */
+  /** Our own id: stable within one search, not across searches (it comes from the first provider that returns the hotel). */
   id: string;
   name: string;
   stars: number | null;
