@@ -65,7 +65,8 @@ export interface Hotel {
   matchNote?: string;
 }
 
-export type ProviderStatus = "ok" | "retrying" | "timeout" | "error" | "rate_limited";
+/** "retrying" is interim; the rest are final. "partial": some hotels arrived, then it failed or timed out. */
+export type ProviderStatus = "ok" | "partial" | "retrying" | "timeout" | "error" | "rate_limited";
 
 export interface SearchOptions {
   signal: AbortSignal;
