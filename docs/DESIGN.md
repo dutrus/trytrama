@@ -148,7 +148,7 @@ El cliente ve un `provider_status` por proveedor (`ok`, `retrying`, `timeout`, `
 - **Ejecución durable:** el sistema solo consulta, así que repetir una búsqueda es seguro. Con reservas haría falta persistir estado e idempotency keys.
 - **Varias instancias:** el límite de 5 pedidos por segundo de C es global. Con más de una copia de la API habría que compartir ese contador.
 - **Confirmación de precio al reservar:** el precio mostrado es indicativo.
-- **Dedup perfecto:** con estos datos no es posible.
+- **Dedup perfecto:** un dedup perfecto no está garantizado con proveedores reales; el 0 de errores medido es optimista por lo limpio del simulador.
 - **Evento para fusionar filas ya enviadas:** resolvería el empate por orden de llegada (ver "Dónde se equivoca"), a costa de que el cliente tenga que poder unir o quitar filas.
 - **Datos que la agente debería pedir antes de buscar** (destino, fechas, personas): hoy lo resuelve el agente preguntando.
 - PENDIENTE: lo que no llegue a hacer.
