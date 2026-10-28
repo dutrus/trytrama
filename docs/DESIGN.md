@@ -103,11 +103,11 @@ Los tres proveedores se consultan en paralelo y cada resultado sale por el strea
 
 B es el más lento: cada página tarda de 0,8 a 2,5 s y van una tras otra, así que con dos páginas puede llegar a unos 5 s. Si además una página necesita el segundo pedido, puede vencer el tope y B queda incompleto. C pasa por un limitador propio de 5 pedidos por segundo con ráfaga de 4, no de 5 como el servidor: el primer pedido también abre la conexión y le llega a C más tarde de lo que lo contamos, y con ráfaga de 5 el sexto pedido llegaba antes de tiempo y recibía un 429. Con ráfaga de 4 queda un turno de margen sin bajar la tasa.
 
-**Cuándo mando `done`:** cuando terminaron los tres proveedores o a los 5,5 s, lo que pase primero. La medición lo confirma: B llega a `ok` con p99 de 4,9 s, así que un tope menor lo perdería más seguido. Prioricé completitud sobre rapidez: una agente pierde más si se pierde la mejor tarifa que si espera un poco más, y mientras tanto ya ve resultados y avisos de qué falta. Descarté un tope de 1,5 s: sería más rápido, pero casi siempre perdería a C.
+**Cuándo mando `done`:** cuando terminaron los tres proveedores o a los 5,5 s, lo que pase primero. La medición lo confirma: el tope cubre a B en la gran mayoría de los casos, y en cerca del 6,5% de las búsquedas B queda incompleto y se avisa (`partial` o `timeout`). Un tope menor lo perdería más seguido. Prioricé completitud sobre rapidez: una agente pierde más si se pierde la mejor tarifa que si espera un poco más, y mientras tanto ya ve resultados y avisos de qué falta. Descarté un tope de 1,5 s: sería más rápido, pero casi siempre perdería a C.
 
 | Qué se guarda | Cuánto | Por qué |
 |---|---|---|
-| Búsqueda completa | 1 a 2 minutos | El precio es indicativo; se confirma al reservar |
+| Búsqueda completa | 90 s | El precio es indicativo; se confirma al reservar |
 | Cotización de B | Hasta que cambie el día | El manual dice que se actualiza una vez al día |
 | Tabla de impuestos de C | 1 hora | Cambia poco y C tiene límite de pedidos |
 | Búsquedas con un proveedor caído | No se guardan | Para no repetir una falla |
@@ -139,7 +139,7 @@ Cada proveedor falla por separado y ninguna falla tumba la búsqueda.
 - **B:** el 5% de las veces nunca responde. Si un pedido (una página o la cotización) no contesta en 2,6 s, que es el máximo normal de B, lanzo un segundo pedido igual sin cancelar el primero y uso el que llegue antes; el cliente ve `retrying`. Además B pagina de a 20 aunque se pida `limite=50`, y casi todos los destinos tienen dos páginas: si una página intermedia falla, o vence el tope entre páginas, el adaptador devuelve los hoteles que ya llegaron marcados como incompletos (`PartialResultError`) en vez de descartarlos.
 - **C:** ante un 429 espera `Retry-After` sin revisar si cabe dentro del tope, porque el adaptador no conoce el tope: si la búsqueda se cancela mientras espera, informa `rate_limited`. Ante un GDS-503 (que C devuelve como `<Fault>` dentro de un HTTP 200) reintenta una vez.
 
-El cliente ve un `provider_status` por proveedor (`ok`, `retrying`, `timeout`, `error`, `rate_limited`) y el `done` resume qué faltó y por qué. Cómo se muestra "B incompleto" (llegaron algunos hoteles y faltan otros) queda PENDIENTE para el paso 4: la lista de estados todavía no tiene uno para eso. Reintentar es seguro porque una búsqueda no cambia nada en el proveedor.
+El cliente ve un `provider_status` por proveedor (`ok`, `partial`, `retrying`, `timeout`, `error`, `rate_limited`) y el `done` resume qué faltó y por qué, con la lista `missing`. "B incompleto" es el estado `partial`: los hoteles que llegaron se muestran igual, y el estado dice cuántos llegaron y por qué se cortó (`timeout` si venció el tope entre páginas, `error` si falló una página). Reintentar es seguro porque una búsqueda no cambia nada en el proveedor.
 
 ## Agent
 
@@ -169,6 +169,7 @@ El cliente ve un `provider_status` por proveedor (`ok`, `retrying`, `timeout`, `
 - **Subir el tope del `done`:** recuperaría parte de las búsquedas en que B queda incompleto, a costa de que todas las búsquedas nuevas en que B tarda esperen más.
 - **Pedir las páginas de B en paralelo:** bajaría el tiempo de B, pero hoy no se puede, porque el cursor es opaco y cada página necesita el cursor de la anterior.
 - **Coalescing de búsquedas idénticas en curso:** con esta carga solo se habrían unido 6 pedidos de 200, porque casi nunca coinciden dos iguales en el mismo momento. Si se agrega, la desconexión de un cliente no debe cancelar una búsqueda que otros siguen esperando.
+- **Limpieza de la caché:** las entradas vencidas se borran solo cuando alguien vuelve a pedir esa búsqueda. En un servidor que corre mucho tiempo, las búsquedas que nadie repite quedan en memoria; haría falta una limpieza periódica o un tamaño máximo.
 - **Datos que la agente debería pedir antes de buscar** (destino, fechas, personas): hoy lo resuelve el agente preguntando.
 - PENDIENTE: lo que no llegue a hacer.
 
