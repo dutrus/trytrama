@@ -2,23 +2,28 @@
  * HTTP entry point: validates /search parameters and streams the search as SSE.
  * Providers are registered in the list below; nothing else knows about them.
  */
+import { TtlCache } from "./cache.ts";
 import { createProviderA } from "./providers/a.ts";
 import { createProviderB } from "./providers/b.ts";
 import { createProviderC } from "./providers/c.ts";
-import { runSearch } from "./search.ts";
+import { type RecordedEvent, replaySearch, runSearch } from "./search.ts";
 import { sseResponse } from "./sse.ts";
 import { DESTINATIONS, type Destination, type ProviderAdapter, type SearchParams } from "./types.ts";
 
 /** Time until done. Covers B's two pages (up to ~5 s); see DESIGN.md. */
 const DEADLINE_MS = 5500;
 const MAX_NIGHTS = 30;
+/** Prices are indicative (confirmed when booking), so a complete search can be reused for a while. */
+const SEARCH_CACHE_TTL_MS = 90_000;
 
 export interface AppOptions {
   providers: ProviderAdapter[];
   deadlineMs: number;
+  /** Complete searches, as the events they streamed. Injectable for tests (clock). */
+  searchCache?: TtlCache<RecordedEvent[]>;
 }
 
-export function createApp({ providers, deadlineMs }: AppOptions) {
+export function createApp({ providers, deadlineMs, searchCache = new TtlCache() }: AppOptions) {
   return {
     fetch(req: Request): Response {
       const url = new URL(req.url);
@@ -28,8 +33,24 @@ export function createApp({ providers, deadlineMs }: AppOptions) {
       const parsed = parseSearchParams(url.searchParams);
       if ("error" in parsed) return Response.json({ error: "invalid_params", message: parsed.error }, { status: 400 });
 
+      const { params } = parsed;
+      const key = `${params.destination}|${params.checkIn}|${params.checkOut}|${params.adults}|${params.children}`;
+      const hit = searchCache.get(key);
+      if (hit) return sseResponse(async (send) => replaySearch(hit, send), req.signal);
+
       return sseResponse(async (send, signal) => {
-        await runSearch(parsed.params, providers, send, { deadlineMs, signal });
+        const recorded: RecordedEvent[] = [];
+        const done = await runSearch(
+          params,
+          providers,
+          (event, data) => {
+            recorded.push({ event, data });
+            send(event, data);
+          },
+          { deadlineMs, signal },
+        );
+        // Only when every provider finished ok: a failure or a partial answer is not worth repeating.
+        if (done.complete) searchCache.set(key, recorded, SEARCH_CACHE_TTL_MS);
       }, req.signal);
     },
   };

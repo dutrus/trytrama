@@ -27,6 +27,8 @@ export interface ProviderOutcome {
 }
 
 export interface DoneEvent {
+  /** True when the events are a replay of a cached search. */
+  cached: boolean;
   durationMs: number;
   /** Time to the first hotel event; null if no hotel arrived. */
   firstHotelMs: number | null;
@@ -52,7 +54,7 @@ export async function runSearch(params: SearchParams, providers: ProviderAdapter
   const deadline = AbortSignal.timeout(opts.deadlineMs);
   const signal = AbortSignal.any([deadline, opts.signal]);
 
-  send("search_started", { params, providers: providers.map((p) => p.id), deadlineMs: opts.deadlineMs });
+  send("search_started", { params, providers: providers.map((p) => p.id), deadlineMs: opts.deadlineMs, cached: false });
 
   const deduper = new Deduper();
   const outcomes: Partial<Record<ProviderId, ProviderOutcome>> = {};
@@ -117,6 +119,7 @@ export async function runSearch(params: SearchParams, providers: ProviderAdapter
 
   const missing = providers.map((p) => p.id).filter((id) => outcomes[id]?.status !== "ok");
   const done: DoneEvent = {
+    cached: false,
     durationMs: elapsed(),
     firstHotelMs,
     hotels: deduper.hotels().length,
@@ -126,6 +129,37 @@ export async function runSearch(params: SearchParams, providers: ProviderAdapter
   };
   send("done", done);
   return done;
+}
+
+export interface RecordedEvent {
+  event: string;
+  // biome-ignore lint/suspicious/noExplicitAny: payloads differ per event name
+  data: any;
+}
+
+/**
+ * Replays a recorded search: same hotels and offers, marked cached, with this
+ * replay's own times. Retries of the original search are not replayed.
+ */
+export function replaySearch(recorded: RecordedEvent[], send: Send): void {
+  const t0 = performance.now();
+  const elapsed = () => Math.round(performance.now() - t0);
+  let firstHotelMs: number | null = null;
+
+  for (const { event, data } of recorded) {
+    if (event === "search_started") {
+      send(event, { ...data, cached: true });
+    } else if (event === "provider_status") {
+      if (data.status !== "retrying") send(event, { ...data, ms: elapsed() });
+    } else if (event === "done") {
+      const ms = elapsed();
+      const providers = Object.fromEntries(Object.entries(data.providers as DoneEvent["providers"]).map(([id, o]) => [id, { ...o, ms }]));
+      send(event, { ...data, cached: true, durationMs: ms, firstHotelMs, providers });
+    } else {
+      if (event === "hotel") firstHotelMs ??= elapsed();
+      send(event, data);
+    }
+  }
 }
 
 function failureStatus(err: unknown, deadline: AbortSignal): ProviderOutcome["status"] {

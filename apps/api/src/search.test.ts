@@ -61,7 +61,7 @@ describe("runSearch", () => {
       fake("C", (o) => after(70, [cerroOttoC], o.signal)),
     ]);
     expect(names).toEqual(["search_started", "hotel", "provider_status", "hotel", "provider_status", "offer", "provider_status", "done"]);
-    expect(events[0]!.data).toEqual({ params, providers: ["A", "B", "C"], deadlineMs: 300 });
+    expect(events[0]!.data).toEqual({ params, providers: ["A", "B", "C"], deadlineMs: 300, cached: false });
     expect(events[5]!.data).toMatchObject({ hotelId: "A-AW-1", provider: "C" });
     expect(done).toMatchObject({ hotels: 2, complete: true, missing: [] });
     expect(done.providers.A).toMatchObject({ status: "ok", hotels: 1 });
