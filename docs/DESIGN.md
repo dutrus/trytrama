@@ -4,7 +4,7 @@
      A simple diagram of how a search flows (Mermaid or ASCII) is welcome but optional. -->
 
 ## Resumen
-- Los tres proveedores se consultan en paralelo y cada resultado sale por SSE apenas llega. El `done` sale cuando terminan los tres o a los 5,5 s, e informa qué proveedor faltó y por qué.
+- Los tres proveedores se consultan en paralelo y cada resultado sale por SSE apenas llega. El `done` sale cuando terminan los tres o a los 5,5 s (más hasta 100 ms de margen), e informa qué proveedor faltó y por qué.
 - Un hotel reúne ofertas de varios proveedores, con precio total en USD e impuestos incluidos. Los manuales no coincidían con la realidad (impuestos de B y de C, paginación de B), así que el código se apoya en lo que probé contra los proveedores y no en su documentación.
 - Dedup: se une con nombre, calle y número iguales; ante la duda no se une y se explica. Medido contra el simulador dio 0 errores, pero es un resultado optimista; el error caro (unir dos hoteles distintos) está documentado con su test.
 - Fallas: cada proveedor falla por separado. B reintenta por detrás y puede quedar incompleto (`partial`).
@@ -109,7 +109,7 @@ Los tres proveedores se consultan en paralelo y el resultado de cada uno sale po
 
 B es el más lento: cada página tarda de 0,8 a 2,5 s y van una tras otra, así que con dos páginas puede llegar a unos 5 s. Si además una página necesita el segundo pedido, puede vencer el tope y B queda incompleto. C pasa por un limitador propio de 5 pedidos por segundo con ráfaga de 4, no de 5 como el servidor: el primer pedido también abre la conexión y le llega a C más tarde de lo que lo contamos, y con ráfaga de 5 el sexto pedido llegaba antes de tiempo y recibía un 429. Con ráfaga de 4 queda un turno de margen sin bajar la tasa.
 
-**Cuándo mando `done`:** cuando terminaron los tres proveedores o a los 5,5 s, lo que pase primero. La medición lo confirma: el tope cubre a B en la gran mayoría de los casos, y en cerca del 6,5% de las búsquedas B queda incompleto y se avisa (`partial` o `timeout`). Un tope menor lo perdería más seguido. Prioricé completitud sobre rapidez: una agente pierde más si se pierde la mejor tarifa que si espera un poco más, y mientras tanto ya ve resultados y avisos de qué falta. Descarté un tope de 1,5 s: sería más rápido, pero casi siempre perdería a C.
+**Cuándo mando `done`:** cuando terminaron los tres proveedores o a los 5,5 s, lo que pase primero. Al vencer el tope se cancelan los pedidos en curso y se esperan hasta 100 ms más a que los adaptadores lo noten; el que no contestó en ese margen queda en `timeout`. Por eso el `done` p99 da 5513 ms y no 5500. La medición lo confirma: el tope cubre a B en la gran mayoría de los casos, y en cerca del 6,5% de las búsquedas B queda incompleto y se avisa (`partial` o `timeout`). Un tope menor lo perdería más seguido. Prioricé completitud sobre rapidez: una agente pierde más si se pierde la mejor tarifa que si espera un poco más, y mientras tanto ya ve resultados y avisos de qué falta. Descarté un tope de 1,5 s: sería más rápido, pero casi siempre perdería a C.
 
 | Qué se guarda | Cuánto | Por qué |
 |---|---|---|
