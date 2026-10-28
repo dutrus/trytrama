@@ -1,23 +1,28 @@
-# apps/agent — your agent
+# apps/agent: el agente
 
-A small command-line agent that a travel agent could use instead of filling in a search form.
-**Assignment: [`docs/CHALLENGE.md`](../../docs/CHALLENGE.md).**
+Agente de línea de comandos para agentes de viajes. Entiende un pedido en español o inglés, busca con la API `/search` (por HTTP, nunca directo a los proveedores) y responde en streaming, solo con hoteles y precios de la búsqueda.
 
 ```bash
-bun agent "Bariloche, 4 nights from July 10, 2 adults, with breakfast"
+bun agent "Bariloche, 4 noches desde el 10 de julio, 2 adultos, con desayuno"
 ```
 
-What it should do:
+En una terminal sigue la conversación hasta una línea vacía o Ctrl+C. Con la entrada redirigida, cada línea es un mensaje más:
 
-- Understand a request in natural language (Spanish or English), turn it into a search, and
-  ask or state its assumptions when something is missing (e.g. no dates).
-- Call **your** streaming `/search` API over HTTP, as a tool. Don't call the providers directly.
-- Stream its answer to the terminal as results arrive. Don't wait silently for every provider.
-- Only mention hotels and prices that came from the search. Say when a provider didn't answer.
+```bash
+printf 'Del 10 al 14 de enero, 2 adultos\n' | bun agent "Necesito hotel en Bariloche"
+```
 
-Notes:
+La API tiene que estar levantada (`bun dev`).
 
-- Use any LLM provider and model you like, with your own API key. Tell us which one in
-  `docs/DESIGN.md`. A small, cheap model is fine; expected cost is a few dollars at most.
-- Any SDK is fine (or plain `fetch`). Put the key in `.env`; never commit it.
-- If you can't use a paid LLM API, tell us before starting and we'll sort it out.
+## Variables de entorno
+
+| Variable | Para qué | Por defecto |
+|---|---|---|
+| `GEMINI_API_KEY` | Clave de Gemini. Va en `.env`, que no se commitea. | (obligatoria) |
+| `GEMINI_MODEL` | Modelo de Gemini. | `gemini-3.5-flash` |
+| `API_URL` | Dónde está la API de búsqueda. | `http://localhost:3000` |
+
+## Pruebas
+
+- `bun test`: tests sin red, con un modelo falso.
+- `bun apps/agent/src/evals.ts`: 5 casos fijos con Gemini real (necesita la clave y `bun dev`).
