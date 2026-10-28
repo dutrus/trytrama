@@ -213,7 +213,7 @@ Un 400 de la API vuelve al modelo como error de la herramienta; si la API no est
 - **Datos que la agente debería pedir antes de buscar** (destino, fechas, personas): hoy lo resuelve el agente preguntando.
 - **Fechas de "el finde que viene" calculadas en código:** hoy la regla vive solo en el prompt y la cuenta la hace el modelo. Con el mismo prompt, el eval 3 pasó una vez y falló otra (buscó del 6 al 8/11 en vez del 30/10 al 1/11). Calcular esas fechas en código y dárselas al modelo como dato quita esa variación.
 - **Una oferta por línea:** en una corrida real, el modelo escribió "Doble (o Doble twin)" para un mismo hotel, mezclando dos ofertas en una línea. La verificación no lo detecta, porque solo controla precios, nombres de hotel y proveedores faltantes.
-- PENDIENTE: - **Lo que no llegué a hacer:** una prueba de estrés del dedup con datos alterados a propósito (direcciones escritas distinto, hoteles gemelos), porque la medición contra el simulador no ejercita algunas reglas; y un test automático del modo interactivo del CLI (lo probé a mano en un pseudo-terminal, pero no entra en `bun test`).
+- **Lo que no llegué a hacer:** una prueba de estrés del dedup con datos alterados a propósito (direcciones escritas distinto, hoteles gemelos), porque la medición contra el simulador no ejercita algunas reglas; y un test automático del modo interactivo del CLI (lo probé a mano en un pseudo-terminal, pero no entra en `bun test`).
 
 ## AI usage
 
