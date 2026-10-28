@@ -105,7 +105,7 @@ Para sumar un cuarto proveedor: un archivo con su adaptador y registrarlo en la 
      What do you cache, for how long, and how stale can a price be?
      Paste your `bun run load` results. -->
 
-Los tres proveedores se consultan en paralelo y el resultado de cada uno sale por el stream apenas llega. B entrega todos sus hoteles juntos, al terminar sus páginas, no página por página. A responde en 150 a 400 ms, así que el primer evento sale rápido sin esperar a B ni a C.
+Los tres proveedores se consultan en paralelo y el resultado de cada uno sale por el stream apenas llega. B entrega todos sus hoteles juntos, al terminar sus páginas, no página por página. Es a propósito: el contrato de los adaptadores devuelve la lista completa, y emitir por página cambiaría la interfaz de los tres. Lo que se gana es poco: el primer hotel viene de A igual, y si B se corta a mitad, el `partial` ya devuelve las páginas que llegaron. A responde en 150 a 400 ms, así que el primer evento sale rápido sin esperar a B ni a C.
 
 B es el más lento: cada página tarda de 0,8 a 2,5 s y van una tras otra, así que con dos páginas puede llegar a unos 5 s. Si además una página necesita el segundo pedido, puede vencer el tope y B queda incompleto. C pasa por un limitador propio de 5 pedidos por segundo con ráfaga de 4, no de 5 como el servidor: el primer pedido también abre la conexión y le llega a C más tarde de lo que lo contamos, y con ráfaga de 5 el sexto pedido llegaba antes de tiempo y recibía un 429. Con ráfaga de 4 queda un turno de margen sin bajar la tasa.
 
