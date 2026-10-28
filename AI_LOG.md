@@ -49,4 +49,5 @@ It doesn't need to be polished.
   - Separar los datos que identifican al hotel (nombre, calle, número) de los que lo confirman (estrellas, coordenadas), en vez de contarlos todos igual.
   - Adoptar la regla de nombre exacto: sube de 111 a 120 uniones sin perder ninguna.
   - Medirla contra el catálogo del simulador usado como respuesta correcta, solo en un script descartable fuera del repo. Nada en `apps/` depende de él, y en un sistema real esa respuesta no existe.
-  - Resultado de esa medición: PENDIENTE
+  - Resultado de esa medición: - **What went wrong or had to be corrected:** La primera regla exigía un refuerzo (estrellas o coordenadas) siempre, y separaba 9 pares que eran el mismo hotel. Lo vimos al medirla contra datos reales, y cambié a nombre exacto más calle y número. Al validar la medición, romper la regla ignorando calle o nombre no produjo errores: el simulador es demasiado limpio, y esas comprobaciones solo están cubiertas por tests unitarios.
+- Resultado de la medición contra el catálogo del simulador: 195 hoteles, 6 estadías y 3 órdenes de llegada, 0 uniones erróneas y 0 separados. Un resultado optimista: el simulador usa la misma dirección en todos los proveedores.
