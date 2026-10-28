@@ -114,7 +114,7 @@ describe("provider B adapter", () => {
       stars: 4,
       address: "Elflein 160",
       coords: { lat: -41.1667, lng: -71.3643 },
-      offers: [{ provider: "B", roomName: "Doble estándar", board: "BB", capacity: 2, refundable: true, totalUsd: 1000 }],
+      offers: [{ provider: "B", roomType: "DBL", roomName: "Doble estándar", board: "BB", capacity: 2, refundable: true, totalUsd: 1000 }],
     });
     const q = searches[0]!.searchParams;
     expect(q.get("ciudad_id")).toBe("1");

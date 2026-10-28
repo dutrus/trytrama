@@ -17,6 +17,7 @@ import {
   type ProviderHotel,
   type SearchOptions,
   type SearchParams,
+  toRoomType,
 } from "../types.ts";
 
 export interface ProviderBConfig {
@@ -203,6 +204,7 @@ function parseRoom(r: Json, usdArs: number): Offer | null {
 
   return {
     provider: "B",
+    roomType: toRoomType(r.codigo_habitacion),
     roomName: typeof r.descripcion === "string" ? r.descripcion : String(r.codigo_habitacion ?? ""),
     board,
     capacity: r.capacidad_max,

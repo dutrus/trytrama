@@ -23,7 +23,7 @@ function hotel(provider: ProviderId, id: string, name: string, address: string, 
     stars,
     address,
     coords: null,
-    offers: [{ provider, roomName: "DBL", board: "BB", capacity: 2, refundable: true, totalUsd: 100 }],
+    offers: [{ provider, roomType: "DBL", roomName: "DBL", board: "BB", capacity: 2, refundable: true, totalUsd: 100 }],
   };
 }
 

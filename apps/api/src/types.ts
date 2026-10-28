@@ -12,6 +12,14 @@ export type ProviderId = "A" | "B" | "C";
 export const BOARDS = ["RO", "BB", "HB", "FB", "AI"] as const;
 export type Board = (typeof BOARDS)[number];
 
+/** Room codes. All three providers use this same set (A as the roomCode prefix, B as codigo_habitacion, C as room). */
+export const ROOM_TYPES = ["SGL", "DBL", "TWN", "TPL", "FAM", "STE"] as const;
+export type RoomType = (typeof ROOM_TYPES)[number];
+
+export function toRoomType(code: unknown): RoomType | null {
+  return ROOM_TYPES.includes(code as RoomType) ? (code as RoomType) : null;
+}
+
 export interface SearchParams {
   destination: Destination;
   /** YYYY-MM-DD */
@@ -29,6 +37,9 @@ export interface Coords {
 
 export interface Offer {
   provider: ProviderId;
+  /** Same code across providers; null if a provider sends one we don't know. */
+  roomType: RoomType | null;
+  /** The provider's own room name, in its own language and style. */
   roomName: string;
   board: Board;
   capacity: number;

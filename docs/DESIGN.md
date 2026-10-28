@@ -33,7 +33,7 @@ Cliente (agente de viajes o agente de IA)
 
 Un **hotel** tiene id propio y estable, nombre, estrellas, dirección, coordenadas y una lista de ofertas. Estrellas y coordenadas pueden ser `null`: A omite las estrellas en algunos hoteles (su manual dice que son obligatorias) y C no trae coordenadas. Prefiero un `null` explícito a inventar un valor.
 
-Una **oferta** tiene proveedor, habitación, régimen (RO, BB, HB, FB, AI), capacidad, reembolsable (`true`, `false` o `null` si el proveedor no lo informó) y precio total en USD por toda la estadía, con impuestos incluidos.
+Una **oferta** tiene proveedor, tipo de habitación, nombre de la habitación, régimen (RO, BB, HB, FB, AI), capacidad, reembolsable (`true`, `false` o `null` si el proveedor no lo informó) y precio total en USD por toda la estadía, con impuestos incluidos. El tipo de habitación (`roomType`) es un código común: SGL, DBL, TWN, TPL, FAM o STE. Los tres proveedores usan ese mismo conjunto (A como prefijo de `roomCode`, B en `codigo_habitacion`, C en `room`); lo verifiqué con datos reales, y si llega otro código queda `null`. El nombre (`roomName`) se guarda tal cual lo manda cada proveedor, porque viene en tres estilos: inglés en A ("Twin Standard - Bed & breakfast"), español en B ("Doble twin") y solo el código en C ("TWN").
 
 **Cómo llego a un precio comparable:**
 - **A:** ya viene en USD y por la estadía. Su manual dice que "pueden aplicar impuestos en la propiedad". Asumo que están incluidos porque la Twin de Cabañas Cerro Otto cuesta 766,10 en A y 753,04 en C con impuestos. Es una suposición, no una certeza.

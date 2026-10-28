@@ -10,7 +10,7 @@ const hotelA: ProviderHotel = {
   stars: 4,
   address: "Elflein 1597",
   coords: null,
-  offers: [{ provider: "A", roomName: "Twin", board: "BB", capacity: 2, refundable: true, totalUsd: 766.1 }],
+  offers: [{ provider: "A", roomType: "TWN", roomName: "Twin", board: "BB", capacity: 2, refundable: true, totalUsd: 766.1 }],
 };
 
 const fakeA: ProviderAdapter = { id: "A", search: async () => [hotelA] };

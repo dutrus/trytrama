@@ -16,6 +16,7 @@ import {
   type ProviderHotel,
   type SearchOptions,
   type SearchParams,
+  toRoomType,
 } from "../types.ts";
 
 export type TaxTable = Map<string, { pct: number; perNight: number }>;
@@ -214,6 +215,7 @@ function parseRate(r: Record<string, string>, nights: number, tax: { pct: number
   const total = nightly * nights * (1 + tax.pct / 100) + tax.perNight * nights;
   return {
     provider: "C",
+    roomType: toRoomType(r.room),
     roomName: r.room ?? "",
     board: r.plan as Board,
     capacity,

@@ -110,7 +110,7 @@ describe("provider C adapter", () => {
       address: "AV. BONAMPAK 1189",
       coords: null,
       // 172.97 * 4 * 1.19 + 4.50 * 4 = 841.3372 -> 841.34; the DBL rate has an unknown plan and is skipped.
-      offers: [{ provider: "C", roomName: "STE", board: "BB", capacity: 2, refundable: false, totalUsd: 841.34 }],
+      offers: [{ provider: "C", roomType: "STE", roomName: "STE", board: "BB", capacity: 2, refundable: false, totalUsd: 841.34 }],
     });
   });
 

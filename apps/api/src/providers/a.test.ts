@@ -90,6 +90,7 @@ describe("provider A adapter", () => {
       offers: [
         {
           provider: "A",
+          roomType: "TWN",
           roomName: "Twin Standard - Bed & breakfast",
           board: "BB",
           capacity: 2,
@@ -116,6 +117,16 @@ describe("provider A adapter", () => {
     const [, suiza] = await adapter.search(params, opts());
     expect(suiza!.stars).toBeNull();
     expect(suiza!.offers[0]!.refundable).toBeNull();
+  });
+
+  test("roomType comes from the roomCode prefix; an unknown code is null", async () => {
+    const body = structuredClone(okBody);
+    body.hotels[1]!.rooms[0]!.roomCode = "PENT-RO";
+    const { adapter } = fakeA([() => Response.json(body)]);
+    const [otto, suiza] = await adapter.search(params, opts());
+    expect(otto!.offers[0]!.roomType).toBe("TWN");
+    expect(suiza!.offers[0]!.roomType).toBeNull();
+    expect(suiza!.offers[0]!.roomName).toBe("Double - Room only");
   });
 
   test("retries once after an HTML 500 and reports the retry", async () => {

@@ -11,6 +11,7 @@ import {
   type ProviderAdapter,
   type ProviderHotel,
   type SearchOptions,
+  toRoomType,
 } from "../types.ts";
 
 export interface ProviderAConfig {
@@ -85,6 +86,8 @@ function parseRoom(r: Json): Offer | null {
   if (!Number.isInteger(r.maxOccupancy)) return null;
   return {
     provider: "A",
+    // roomCode is "<room>-<board>", e.g. "TWN-BB".
+    roomType: toRoomType(typeof r.roomCode === "string" ? r.roomCode.split("-")[0] : null),
     roomName: typeof r.roomName === "string" ? r.roomName : String(r.roomCode ?? ""),
     board: r.boardType as Board,
     capacity: r.maxOccupancy,
