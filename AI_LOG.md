@@ -51,3 +51,30 @@ It doesn't need to be polished.
   - Medirla contra el catálogo del simulador usado como respuesta correcta, solo en un script descartable fuera del repo. Nada en `apps/` depende de él, y en un sistema real esa respuesta no existe.
   - Resultado de esa medición: - **What went wrong or had to be corrected:** La primera regla exigía un refuerzo (estrellas o coordenadas) siempre, y separaba 9 pares que eran el mismo hotel. Lo vimos al medirla contra datos reales, y cambié a nombre exacto más calle y número. Al validar la medición, romper la regla ignorando calle o nombre no produjo errores: el simulador es demasiado limpio, y esas comprobaciones solo están cubiertas por tests unitarios.
 - Resultado de la medición contra el catálogo del simulador: 195 hoteles, 6 estadías y 3 órdenes de llegada, 0 uniones erróneas y 0 separados. Un resultado optimista: el simulador usa la misma dirección en todos los proveedores.
+
+---
+
+## Session 3 (cierre)
+
+- **What went well:** Pedí que la regla de dedup se probara sobre los datos reales de los 5 destinos y que me mostraran las uniones una por una antes de escribir código. Así se vio que la primera regla (siempre exigir estrellas o coordenadas) separaba 9 pares que eran el mismo hotel, y cambié a nombre exacto más calle y número.
+- **What went wrong or had to be corrected:** Medida contra el catálogo del simulador, la regla dio 0 errores, y desconfié del resultado perfecto. Pedí romper la regla a propósito para comprobar que la medición detectaba errores: ignorar la calle o el nombre no produjo ninguno (el simulador es demasiado limpio, esas comprobaciones solo las cubren los tests unitarios), y con roturas más fuertes sí aparecieron. Además pedí un test del error caro (dos hoteles distintos con el mismo nombre y dirección se unen), que no existía.
+- **What you decided, not the AI:** Separar los datos que identifican al hotel de los que lo confirman. Adoptar la regla de nombre exacto. No presentar Los Coihues como un error actual sino como historia de la regla anterior. Dejar la caché y el coalescing para después de medir el load test sin caché, para tener un antes y un después.
+
+---
+
+## Session 4: API completa, load test y agente
+
+- **Tool / model:** Claude Code (código) y Claude (chat, revisión de cada plan)
+- **Goal:** Orquestador, `/search` con SSE, load test, caché y agente con Gemini.
+- **What went well:** En cada paso pedí el plan antes del código y lo revisé. Medí `bun run load` con el ruido activo (`CHAOS_SEED=ci`) y reinicié `bun dev` antes de cada medición para que el antes y el después fueran comparables: primer evento p95 de 5 ms, 0% de errores. Como el primer evento es `search_started`, pedí medir también el tiempo al primer hotel (p95 de 401 ms). Antes de agregar `roomType` a la API verificó con datos reales que los tres proveedores usan los mismos 6 códigos.
+- **What went wrong or had to be corrected:**
+  - Al verificar la API con los proveedores en `CHAOS=off` los tiempos eran de milisegundos y no servían para medir. Lo noté por los registros y reinicié con el ruido activo.
+  - Un artículo al inicio de una oración ("El Hotel Catedral") hacía que la verificación del agente tomara un hotel existente como desconocido. Lo encontró y lo corrigió Claude Code antes de commitear.
+  - Probando el agente a mano en PowerShell encontré dos fallos que los tests con modelo falso no veían: el prompt `>` aparecía en medio de la respuesta anterior, y después de escribir mi respuesta no salía nada. Las pruebas de Claude Code habían usado entrada por pipe, no el modo interactivo. PENDIENTE: causa y arreglo.
+- **What you decided, not the AI:**
+  - Esperar la medición sin caché antes de implementar la caché.
+  - Poner `roomType` en la API y no traducir los nombres de habitación solo en el agente.
+  - Que el pie con el estado de los proveedores lo imprima el código y no dependa del modelo.
+  - Que el agente sea conversacional, con historial.
+  - Probar el agente a mano además de con tests, y pedir la salida cruda de cada corrida, sin resumir.
+    - Causa del "se queda parado" y de que "tarda mucho": Gemini respondía 429 por cuota agotada con una espera de unos 55 minutos, y la capa de Gemini esperaba en silencio. Yo sospeché del modo interactivo del CLI y esa no era la causa principal; Claude Code lo reprodujo en un pseudo-terminal y lo confirmó. Además encontró que lo escrito mientras el modelo respondía se perdía y que una respuesta vacía no se manejaba. Arreglo: esperas máximas de 20 s, avisos "Pensando…" y de cada reintento, y reintento ante respuesta vacía.
