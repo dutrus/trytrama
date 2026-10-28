@@ -1,10 +1,16 @@
 # Design
 
-# Design
-
 <!-- 1–3 pages. Bullets are fine. Tell us what you decided, why, and which alternatives you discarded.
      A simple diagram of how a search flows (Mermaid or ASCII) is welcome but optional. -->
 
+## Resumen
+- Los tres proveedores se consultan en paralelo y cada resultado sale por SSE apenas llega. El `done` sale cuando terminan los tres o a los 5,5 s, e informa qué proveedor faltó y por qué.
+- Un hotel reúne ofertas de varios proveedores, con precio total en USD e impuestos incluidos. Los manuales no coincidían con la realidad (impuestos de B y de C, paginación de B), así que el código se apoya en lo que probé contra los proveedores y no en su documentación.
+- Dedup: se une con nombre, calle y número iguales; ante la duda no se une y se explica. Medido contra el simulador dio 0 errores, pero es un resultado optimista; el error caro (unir dos hoteles distintos) está documentado con su test.
+- Fallas: cada proveedor falla por separado. B reintenta por detrás y puede quedar incompleto (`partial`).
+- Medición con chaos activo: primer evento p95 de 5 ms, primer hotel p95 de unos 400 ms y 0% de errores. El `done` p95 coincide con el tope porque en 6,5% de las búsquedas B no llega; la caché de 90 s baja el `done` p50 de 3 s a 2 ms.
+- Agente: Gemini, conversacional, y una verificación en código de precios y hoteles cuyos límites están documentados.
+- Lo más importante que dejé afuera: calcular en código las fechas de "el finde que viene", un evento para fusionar filas ya enviadas y los nombres abreviados de C.
 ```
 Cliente (agente de viajes o agente de IA)
         |  GET /search  (SSE)
@@ -137,7 +143,7 @@ Primer evento y `done` salen de `bun run load`. Primer hotel, aciertos y búsque
 Cada proveedor falla por separado y ninguna falla tumba la búsqueda.
 - **A:** un reintento ante un 5xx.
 - **B:** el 5% de las veces nunca responde. Si un pedido (una página o la cotización) no contesta en 2,6 s, que es el máximo normal de B, lanzo un segundo pedido igual sin cancelar el primero y uso el que llegue antes; el cliente ve `retrying`. Además B pagina de a 20 aunque se pida `limite=50`, y casi todos los destinos tienen dos páginas: si una página intermedia falla, o vence el tope entre páginas, el adaptador devuelve los hoteles que ya llegaron marcados como incompletos (`PartialResultError`) en vez de descartarlos.
-- **C:** ante un 429 espera `Retry-After` sin revisar si cabe dentro del tope, porque el adaptador no conoce el tope: si la búsqueda se cancela mientras espera, informa `rate_limited`. Ante un GDS-503 (que C devuelve como `<Fault>` dentro de un HTTP 200) reintenta una vez.
+- **C:** ante un 429 espera `Retry-After` sin revisar si cabe dentro del tope, porque el adaptador no conoce el tope: si la búsqueda se cancela mientras espera, informa `rate_limited`. Ante un GDS-503 (que C devuelve como `<Fault>` dentro de un HTTP 200) reintenta una vez. Reintenta como máximo 2 veces ante un 429; al tercero informa rate_limited aunque quede tiempo.
 
 El cliente ve un `provider_status` por proveedor (`ok`, `partial`, `retrying`, `timeout`, `error`, `rate_limited`) y el `done` resume qué faltó y por qué, con la lista `missing`. "B incompleto" es el estado `partial`: los hoteles que llegaron se muestran igual, y el estado dice cuántos llegaron y por qué se cortó (`timeout` si venció el tope entre páginas, `error` si falló una página). Reintentar es seguro porque una búsqueda no cambia nada en el proveedor.
 
@@ -207,11 +213,15 @@ Un 400 de la API vuelve al modelo como error de la herramienta; si la API no est
 - **Datos que la agente debería pedir antes de buscar** (destino, fechas, personas): hoy lo resuelve el agente preguntando.
 - **Fechas de "el finde que viene" calculadas en código:** hoy la regla vive solo en el prompt y la cuenta la hace el modelo. Con el mismo prompt, el eval 3 pasó una vez y falló otra (buscó del 6 al 8/11 en vez del 30/10 al 1/11). Calcular esas fechas en código y dárselas al modelo como dato quita esa variación.
 - **Una oferta por línea:** en una corrida real, el modelo escribió "Doble (o Doble twin)" para un mismo hotel, mezclando dos ofertas en una línea. La verificación no lo detecta, porque solo controla precios, nombres de hotel y proveedores faltantes.
-- PENDIENTE: lo que no llegue a hacer.
+- PENDIENTE: - **Lo que no llegué a hacer:** una prueba de estrés del dedup con datos alterados a propósito (direcciones escritas distinto, hoteles gemelos), porque la medición contra el simulador no ejercita algunas reglas; y un test automático del modo interactivo del CLI (lo probé a mano en un pseudo-terminal, pero no entra en `bun test`).
 
 ## AI usage
 
 <!-- Short summary: what you used it for, where it helped, where it got things wrong and how you noticed.
      Details go in AI_LOG.md. -->
 
-Usé Claude en el chat para entender el problema y tomar las decisiones de diseño, y Claude Code para escribir el código con mi aprobación en cada paso. Dos casos donde falló o no coincidía con la realidad: el primer modelo de Gemini que probé ya no estaba disponible (lo noté por un 404 al probarlo), y el script de prueba hacía fallar `bun typecheck` en el CI (lo detectó Claude Code al revisar). PENDIENTE: completar con lo que ocurra al construir. Detalle en `AI_LOG.md`.
+Usé Claude en el chat para entender el problema y tomar las decisiones de diseño, y Claude Code para escribir el código, pidiéndole el plan antes y aprobando cada paso. Me ayudó a encontrar que los manuales de los proveedores no coincidían con la realidad (impuestos de B y de C, paginación de B, errores de C como HTTP 200).
+
+Dónde se equivocó o tuve que corregirlo: el chat me dio un conteo erróneo de hoteles (19 en vez de 20) y diagnosticó mal un fallo del CLI, que atribuyó al modo interactivo cuando la causa principal era una cuota agotada de Gemini; Claude Code lo reprodujo y lo corrigió. Dos datos incorrectos que yo le había pasado sobre los evals los verificó contra git antes de escribirlos. Con el modelo me topé con un 404 y un 503 de Gemini, y mi script de prueba hacía fallar el typecheck del CI. Antes de entregar, Claude Code comparó las afirmaciones concretas de este documento con el código y encontré dos diferencias menores, que corregí.
+
+Lo que decidí yo: esperar más por más opciones antes del `done` pero avisando qué falta, no unir hoteles ante la duda, separar los datos que identifican un hotel de los que lo confirman, medir antes de agregar caché y que el agente sea conversacional. Detalle en `AI_LOG.md`.
