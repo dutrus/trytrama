@@ -200,6 +200,8 @@ Un 400 de la API vuelve al modelo como error de la herramienta; si la API no est
 - **Coalescing de búsquedas idénticas en curso:** con esta carga solo se habrían unido 6 pedidos de 200, porque casi nunca coinciden dos iguales en el mismo momento. Si se agrega, la desconexión de un cliente no debe cancelar una búsqueda que otros siguen esperando.
 - **Limpieza de la caché:** las entradas vencidas se borran solo cuando alguien vuelve a pedir esa búsqueda. En un servidor que corre mucho tiempo, las búsquedas que nadie repite quedan en memoria; haría falta una limpieza periódica o un tamaño máximo.
 - **Datos que la agente debería pedir antes de buscar** (destino, fechas, personas): hoy lo resuelve el agente preguntando.
+- **Fechas de "el finde que viene" calculadas en código:** hoy la regla vive solo en el prompt y la cuenta la hace el modelo. Con el mismo prompt, el eval 3 pasó una vez y falló otra (buscó del 6 al 8/11 en vez del 30/10 al 1/11). Calcular esas fechas en código y dárselas al modelo como dato quita esa variación.
+- **Una oferta por línea:** en una corrida real, el modelo escribió "Doble (o Doble twin)" para un mismo hotel, mezclando dos ofertas en una línea. La verificación no lo detecta, porque solo controla precios, nombres de hotel y proveedores faltantes.
 - PENDIENTE: lo que no llegue a hacer.
 
 ## AI usage
