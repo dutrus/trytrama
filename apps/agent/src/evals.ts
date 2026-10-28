@@ -2,7 +2,8 @@
  * Fixed cases against the real model (needs GEMINI_API_KEY; not part of bun test).
  * Today's date is fixed so relative dates are reproducible.
  *
- *   bun apps/agent/src/evals.ts
+ *   bun apps/agent/src/evals.ts        # all cases
+ *   bun apps/agent/src/evals.ts 5      # only case 5
  *
  * Cases 1-3 use the real /search API (bun dev must be running). Case 4 uses a
  * fixed result where B did not answer, so it does not depend on chaos.
@@ -135,13 +136,17 @@ async function runCase(llm: Llm, c: Case): Promise<boolean> {
   return results.every((r) => r.startsWith("PASA"));
 }
 
+// Optional case numbers to run only some: bun apps/agent/src/evals.ts 5
+const only = process.argv.slice(2);
+const selected = only.length ? cases.filter((c) => only.some((n) => c.name.startsWith(`${n}.`))) : cases;
+
 const llm = createGemini();
 let passed = 0;
-for (const c of cases) {
+for (const c of selected) {
   try {
     if (await runCase(llm, c)) passed++;
   } catch (err) {
     console.log(`FALLA  error: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
-console.log(`\n${passed} de ${cases.length} casos pasan.`);
+console.log(`\n${passed} de ${selected.length} casos pasan.`);
