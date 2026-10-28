@@ -11,7 +11,7 @@ Cliente (agente de viajes o agente de IA)
         v
    Entrada: valida parámetros, abre el stream
         |
-   Orquestador: lanza A, B y C en paralelo, cada uno con su timeout
+   Orquestador: lanza A, B y C en paralelo, con un tope común de 5,5 s
         |
    +----+-----+-----+
    |          |         |
@@ -36,7 +36,7 @@ Un **hotel** tiene id propio y estable, nombre, estrellas, dirección, coordenad
 Una **oferta** tiene proveedor, tipo de habitación, nombre de la habitación, régimen (RO, BB, HB, FB, AI), capacidad, reembolsable (`true`, `false` o `null` si el proveedor no lo informó) y precio total en USD por toda la estadía, con impuestos incluidos. El tipo de habitación (`roomType`) es un código común: SGL, DBL, TWN, TPL, FAM o STE. Los tres proveedores usan ese mismo conjunto (A como prefijo de `roomCode`, B en `codigo_habitacion`, C en `room`); lo verifiqué con datos reales, y si llega otro código queda `null`. El nombre (`roomName`) se guarda tal cual lo manda cada proveedor, porque viene en tres estilos: inglés en A ("Twin Standard - Bed & breakfast"), español en B ("Doble twin") y solo el código en C ("TWN").
 
 **Cómo llego a un precio comparable:**
-- **A:** ya viene en USD y por la estadía. Su manual dice que "pueden aplicar impuestos en la propiedad". Asumo que están incluidos porque la Twin de Cabañas Cerro Otto cuesta 766,10 en A y 753,04 en C con impuestos. Es una suposición, no una certeza.
+- **A:** ya viene en USD y por la estadía. Su manual dice que "pueden aplicar impuestos en la propiedad". Asumo que están incluidos porque la Twin de Cabañas Cerro Otto cuesta 766,10 en A y 753,04 en C con impuestos. Hay otra evidencia, débil: en 187 habitaciones iguales (mismo hotel, código y régimen) de A y B, la diferencia de precio mediana es 7,9% (máxima 18,3%), cuando los impuestos de estos destinos van del 5% al 21%. Es débil porque los proveedores también varían el precio entre sí. Es una suposición, no una certeza.
 - **B:** viene en ARS, con formato argentino ("1.234.567,89"). Si `impuestos_incluidos` es `false` (el manual dice que siempre es `true`), le sumo `impuestos`. Convierto con la cotización del día.
 - **C:** viene neto por noche. Calculo `nightly * noches * (1 + pct) + perNight * noches`. Pido la tabla de impuestos con `HotelTaxRQ` porque la del manual no coincide con la real (Cancún: manual 16%, real 19% más USD 4,50 por noche).
 
@@ -99,7 +99,7 @@ Para sumar un cuarto proveedor: un archivo con su adaptador y registrarlo en la 
      What do you cache, for how long, and how stale can a price be?
      Paste your `bun run load` results. -->
 
-Los tres proveedores se consultan en paralelo y cada resultado sale por el stream apenas llega. A responde en 150 a 400 ms, así que el primer evento sale rápido sin esperar a B ni a C.
+Los tres proveedores se consultan en paralelo y el resultado de cada uno sale por el stream apenas llega. B entrega todos sus hoteles juntos, al terminar sus páginas, no página por página. A responde en 150 a 400 ms, así que el primer evento sale rápido sin esperar a B ni a C.
 
 B es el más lento: cada página tarda de 0,8 a 2,5 s y van una tras otra, así que con dos páginas puede llegar a unos 5 s. Si además una página necesita el segundo pedido, puede vencer el tope y B queda incompleto. C pasa por un limitador propio de 5 pedidos por segundo con ráfaga de 4, no de 5 como el servidor: el primer pedido también abre la conexión y le llega a C más tarde de lo que lo contamos, y con ráfaga de 5 el sexto pedido llegaba antes de tiempo y recibía un 429. Con ráfaga de 4 queda un turno de margen sin bajar la tasa.
 
@@ -193,6 +193,7 @@ Un 400 de la API vuelve al modelo como error de la herramienta; si la API no est
 - **Varias instancias:** el límite de 5 pedidos por segundo de C es global. Con más de una copia de la API habría que compartir ese contador.
 - **Confirmación de precio al reservar:** el precio mostrado es indicativo.
 - **Dedup perfecto:** un dedup perfecto no está garantizado con proveedores reales; el 0 de errores medido es optimista por lo limpio del simulador.
+- **Nombres abreviados de C:** cada fila muestra el nombre del proveedor que la creó, así que un hotel que solo tiene C, o que C trajo primero, aparece como "HTL CERRO OTTO" o "BTQ HTL VIRREYES". Mejoraría preferir el nombre de A o B cuando llegan después, o embellecer los de C (expandir abreviaturas, mayúsculas y minúsculas).
 - **Evento para fusionar filas ya enviadas:** resolvería el empate por orden de llegada (ver "Dónde se equivoca"), a costa de que el cliente tenga que poder unir o quitar filas.
 - **Subir el tope del `done`:** recuperaría parte de las búsquedas en que B queda incompleto, a costa de que todas las búsquedas nuevas en que B tarda esperen más.
 - **Pedir las páginas de B en paralelo:** bajaría el tiempo de B, pero hoy no se puede, porque el cursor es opaco y cada página necesita el cursor de la anterior.
