@@ -115,6 +115,14 @@ describe("Deduper: kept apart", () => {
     expect(hotels[1]!.matchNote).toBe("Misma dirección que «Grand Resort Isla Mujeres» (A-AW-11134) con otro nombre; se muestra aparte.");
   });
 
+  test("same name and number on another street stays apart", () => {
+    const { hotels } = run(
+      [hotel("A", "AW-1", "Hotel Catedral", "Av. Bustillo 1744", 3)],
+      [hotel("B", "1", "Hotel Catedral", "Mitre 1744", 3)],
+    );
+    expect(hotels).toHaveLength(2);
+  });
+
   test("stars that differ block the merge", () => {
     const { hotels } = run(
       [hotel("A", "AW-1", "Hotel Catedral", "Av. Bustillo 1744", 3)],
@@ -207,6 +215,17 @@ describe("Deduper: known limitations", () => {
     );
     expect(hotels).toHaveLength(2);
     expect(hotels[1]!.matchNote).toBe("Misma dirección que «Panamericano Hotel» (A-AW-1) con otro nombre; se muestra aparte.");
+  });
+
+  test("two different hotels with the same name and address merge when nothing contradicts it", () => {
+    // The costly error: an exact name and address need no reinforcement, so if
+    // B sends no stars or coordinates, nothing can tell these two apart.
+    const { hotels } = run(
+      [hotel("A", "AW-1", "Hotel Central", "Mitre 100", 3, { lat: -41.1335, lng: -71.3103 })],
+      [hotel("B", "1", "Hotel Central", "Mitre 100", null)],
+    );
+    expect(hotels).toHaveLength(1);
+    expect(hotels[0]!.sources.map((s) => s.provider)).toEqual(["A", "B"]);
   });
 
   test("B and C first without matching each other, then A matches both: a tie, A stays apart", () => {
