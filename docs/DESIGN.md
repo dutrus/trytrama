@@ -147,15 +147,43 @@ El cliente ve un `provider_status` por proveedor (`ok`, `partial`, `retrying`, `
      How does it stay grounded? What does it do with partial results and missing information?
      How did you test it? -->
 
-**Modelo:** `gemini-3.5-flash`. Tiene capa gratuita sin tarjeta, soporta llamar herramientas (lo comprobé con una prueba) y alcanza para una sola herramienta con parámetros simples. Probé antes `gemini-2.5-flash` (ya no está disponible para cuentas nuevas) y `gemini-3.8-flash` (503 por demanda). El modelo se configura por variable de entorno y queda detrás de una capa chica, para cambiar de proveedor tocando un solo archivo. Con 503 y 429 el agente reintenta y, si sigue fallando, avisa en vez de romperse. Alternativas que consideré: Groq (más rápido, solo modelos abiertos) y DeepSeek (requiere saldo).
+**Modelo:** `gemini-3.5-flash`. Tiene capa gratuita sin tarjeta, soporta llamar herramientas (lo comprobé con una prueba) y alcanza para una sola herramienta con parámetros simples. Probé antes `gemini-2.5-flash` (ya no está disponible para cuentas nuevas) y `gemini-3.8-flash` (503 por demanda). El modelo se configura con `GEMINI_MODEL` y queda detrás de una capa chica (`llm.ts`, `fetch` directo, sin SDK), para cambiar de proveedor tocando un solo archivo. Alternativas que consideré: Groq (más rápido, solo modelos abiertos) y DeepSeek (requiere saldo). **Límite real de la capa gratuita:** se agotó con pocas decenas de pedidos en una sesión de desarrollo (evals y pruebas); después Gemini respondió 429 pidiendo esperar unos 55 minutos.
 
-**Qué hace:** conversacional en la terminal. La herramienta `search_hotels` acepta solo los 5 destinos válidos (el modelo devolvió "Bariloche" con mayúscula en la prueba) y llama a mi `/search` por HTTP. Al modelo le devuelve datos compactos: hoteles, precio total en USD, régimen, reembolsable y el estado de cada proveedor. Los mensajes del modelo se guardan enteros en el historial (Gemini 3 devuelve una `thoughtSignature` que hay que reenviar); solo se compactan los resultados de búsqueda.
+**Reintentos y fallas de Gemini:** ante 503 o 429 reintenta hasta 3 veces, esperando lo que pide Gemini o 1, 2 y 4 s, y avisa cada reintento ("Gemini ocupado, reintento en 1 s…"). Nunca espera más de 20 s: si la cuota pide más, falla en el momento con un mensaje claro. Antes de ese límite, una cuota agotada dejaba el CLI 55 minutos en silencio y parecía colgado. Si el modelo devuelve una respuesta vacía (sin texto ni llamada a la herramienta), avisa y reintenta una vez; si se repite, mensaje claro. Mientras espera al modelo muestra "Pensando…". La clave nunca aparece en mensajes ni logs.
 
-**Información que falta:** si faltan las fechas, pregunta todo lo que falta en un solo mensaje. Lo menor (adultos) se supone y se avisa.
+**Qué hace:** conversacional en la terminal (`bun agent "…"`; con la entrada redirigida, cada línea es un mensaje más). La herramienta `search_hotels` acepta solo los 5 destinos (lista cerrada, normalizada a minúsculas: el modelo devolvió "Bariloche" en la prueba) y llama a mi `/search` por HTTP, leyendo el SSE a medida que llega para mostrar el progreso de cada proveedor. Al modelo le devuelve datos compactos:
+- **Por hotel:** nombre, estrellas, `matchNote` si existe y sus 3 ofertas más baratas, con cuántas más hay.
+- **Por oferta:** precio total en USD, habitación, régimen, reembolsable y proveedor. La habitación sale de `roomType` en español (Single, Doble, Doble twin, Triple, Familiar, Suite), así no aparece en tres estilos.
+- **De la búsqueda:** el estado de cada proveedor (con `partial` y su motivo), `missing` y `cached`.
+- **Lo que no le pasa:** direcciones, coordenadas ni tiempos.
 
-**Fidelidad a los datos:** no confío solo en el prompt. Después de cada respuesta verifico en código que cada hotel y precio mencionado exista en el último resultado, y que se avise cuando un proveedor no respondió.
+Un 400 de la API vuelve al modelo como error de la herramienta; si la API no está levantada, el CLI lo dice sin traza. Los mensajes del modelo se guardan enteros en el historial (Gemini 3 devuelve una `thoughtSignature` que hay que reenviar); solo se compactan los resultados de búsquedas anteriores, que quedan como un resumen de una línea.
 
-**Cómo lo probé:** PENDIENTE (casos fijos: pedido completo, sin fechas, "el finde que viene", un proveedor caído, destino inexistente).
+**Información que falta:** si faltan datos, pregunta todo en un solo mensaje. Las fechas siempre se preguntan; los adultos se suponen en 2 y se avisa. La fecha de hoy (hora de Argentina) va en las instrucciones. **Supuesto de "el finde que viene":** del viernes al domingo del próximo fin de semana (si hoy ya es viernes, sábado o domingo, el siguiente), y el agente dice qué fechas usó. Un destino fuera de la lista no se busca: dice cuáles hay.
+
+**Fidelidad a los datos:** no confío solo en el prompt. Después de cada respuesta, `grounding.ts` verifica en código que cada precio en USD coincida con una oferta del último resultado, que cada nombre de hotel exista en él y que se mencione cada proveedor de `missing`. Si falla, avisa y le pide al modelo **una** corrección (el texto ya salió por streaming, así que no se puede borrar). Además, el estado de los proveedores y el aviso de caché los imprime el código al final, así no dependen del modelo.
+
+**Qué no detecta la verificación** (es heurística sobre texto libre):
+- Un precio escrito sin marca de moneda ("cuesta 753") o en palabras.
+- Un precio que existe pero atribuido a otro hotel o a otra habitación: compara contra todas las ofertas, no hotel por hotel.
+- Un nombre de hotel sin palabra de tipo ("el Cerro Otto") o en minúsculas; en cambio, un nombre parcial de uno real pasa ("Hotel Cerro" coincide con "Hotel Cerro Otto").
+- Datos falsos que no son nombres ni precios: régimen, reembolsable, estrellas, fechas.
+- Que se mencione un proveedor faltante sin decir bien qué le pasó: solo busca la letra cerca de palabras como "no respondió" o "proveedor".
+
+**Cómo lo probé:**
+- **Tests sin red (`bun test`)**, con un modelo falso:
+  - la herramienta y el historial (partes enteras, compactación);
+  - la verificación;
+  - los reintentos, el límite de 20 s y la respuesta vacía;
+  - una conversación con una lista fija de mensajes.
+- **Modo interactivo** del CLI, probado a mano con un pseudo-terminal y un Gemini falso:
+  - las líneas escritas mientras el modelo responde quedan en cola;
+  - el prompt aparece solo al terminar el turno;
+  - el 503, la respuesta vacía y la cuota agotada muestran su aviso.
+- **Evals con Gemini real** (`evals.ts`, fecha de hoy fija en el miércoles 28/10/2026):
+  - **Pasaron:** 1, pedido completo (busca con los parámetros correctos y pasa la verificación); 2, sin fechas (no busca y pregunta las fechas); 3, "el finde que viene" (busca del 30/10 al 1/11 y lo dice); 4, un proveedor caído (avisa que B no respondió y pasa la verificación). El eval 4 usa un **resultado de búsqueda simulado** en el que falta B: prueba cómo el modelo maneja un proveedor faltante, no la cadena completa.
+  - **PENDIENTE:** el eval 5, destino inexistente. Lo cortó la cuota agotada.
+  - Los 4 que pasaron corrieron antes del arreglo del CLI y de los reintentos. PENDIENTE: volver a correr los 5 con el código actual.
 
 ## What I left out
 
