@@ -32,9 +32,16 @@ export interface LlmRequest {
   tools: FunctionDeclaration[];
 }
 
+export interface RetryInfo {
+  status: number;
+  waitMs: number;
+  /** The attempt about to start (2 = first retry). */
+  attempt: number;
+}
+
 export interface Llm {
-  /** Streams visible text to onText; resolves with every part of the model's turn. */
-  generate(req: LlmRequest, onText: (text: string) => void): Promise<Part[]>;
+  /** Streams visible text to onText; resolves with every part of the model's turn. onWait is called before each retry. */
+  generate(req: LlmRequest, onText: (text: string) => void, onWait?: (info: RetryInfo) => void): Promise<Part[]>;
 }
 
 /** A failure to show as is in the terminal. */
@@ -52,18 +59,21 @@ export interface GeminiOptions {
 }
 
 const RETRYABLE = new Set([429, 503]);
+/** Longer waits are not retried: an exhausted quota can ask for an hour, which looks like a hang. */
+const MAX_WAIT_MS = 20_000;
 
 export function createGemini(opts: GeminiOptions = {}): Llm {
   const apiKey = opts.apiKey ?? process.env.GEMINI_API_KEY ?? "";
   const model = opts.model ?? process.env.GEMINI_MODEL ?? "gemini-3.5-flash";
-  const baseUrl = opts.baseUrl ?? "https://generativelanguage.googleapis.com/v1beta";
+  // GEMINI_BASE_URL lets tests point the CLI at a local fake Gemini.
+  const baseUrl = opts.baseUrl ?? process.env.GEMINI_BASE_URL ?? "https://generativelanguage.googleapis.com/v1beta";
   const maxRetries = opts.maxRetries ?? 3;
   const doFetch = opts.fetch ?? fetch;
   const sleep = opts.sleep ?? ((ms: number) => Bun.sleep(ms));
   const hide = (s: string) => (apiKey ? s.replaceAll(apiKey, "***") : s);
 
   return {
-    async generate(req, onText) {
+    async generate(req, onText, onWait) {
       if (!apiKey) throw new LlmError("Falta GEMINI_API_KEY. Agregala al .env y volvé a intentar.");
       const body = JSON.stringify({
         systemInstruction: { parts: [{ text: req.system }] },
@@ -86,9 +96,14 @@ export function createGemini(opts: GeminiOptions = {}): Llm {
         if (res.ok && res.body) return readStream(res.body, onText);
 
         const detail = hide(await res.text().catch(() => ""));
-        if (RETRYABLE.has(res.status) && attempt < maxRetries) {
-          await sleep(retryDelayMs(res, detail, attempt));
-          continue;
+        if (RETRYABLE.has(res.status)) {
+          const waitMs = retryDelayMs(res, detail, attempt);
+          if (waitMs > MAX_WAIT_MS) throw new LlmError(tooLongMessage(res.status, waitMs));
+          if (attempt < maxRetries) {
+            onWait?.({ status: res.status, waitMs, attempt: attempt + 2 });
+            await sleep(waitMs);
+            continue;
+          }
         }
         throw new LlmError(failureMessage(res.status, model));
       }
@@ -131,6 +146,13 @@ function retryDelayMs(res: Response, body: string, attempt: number): number {
   const fromBody = body.match(/"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/);
   if (fromBody) return Number(fromBody[1]) * 1000;
   return 1000 * 2 ** attempt;
+}
+
+function tooLongMessage(status: number, waitMs: number): string {
+  const minutes = Math.round(waitMs / 60_000);
+  const wait = minutes >= 1 ? `unos ${minutes} minutos` : `${Math.round(waitMs / 1000)} s`;
+  if (status === 429) return `Se agotó la cuota de Gemini (429): pide esperar ${wait}. Probá más tarde o con otro modelo en GEMINI_MODEL.`;
+  return `Gemini no está disponible (${status}) y pide esperar ${wait}. Probá más tarde.`;
 }
 
 function failureMessage(status: number, model: string): string {

@@ -3,7 +3,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { type AgentDeps, newConversation, providersFooter, runConversation, runTurn } from "./agent.ts";
-import type { Llm, LlmRequest, Part } from "./llm.ts";
+import { type Llm, LlmError, type LlmRequest, type Part } from "./llm.ts";
 import { describeToday, systemPrompt } from "./prompt.ts";
 import type { SearchResult, ToolOutcome } from "./searchTool.ts";
 
@@ -124,6 +124,63 @@ describe("runTurn", () => {
     expect(requests[2]!.contents.at(-1)!.parts[0]!.text).toContain("Verificación automática");
     expect(turn.grounding.ok).toBe(true);
     expect(turn.text).toBe("Cabañas Cerro Otto por USD 753,04.");
+  });
+
+  test("an empty answer is retried once, with a notice, and not kept in the history", async () => {
+    const empty: Part[] = [{ thoughtSignature: "SIG-empty" }];
+    const { llm } = scriptedLlm([empty, [{ text: "¿Para qué fechas?" }]]);
+    const { d, notices } = deps(llm);
+    const state = newConversation();
+    const turn = await runTurn(state, "Bariloche", d);
+    expect(notices).toEqual(["Gemini devolvió una respuesta vacía; reintento una vez."]);
+    expect(turn.text).toBe("¿Para qué fechas?");
+    expect(state.history.map((c) => c.parts)).toEqual([[{ text: "Bariloche" }], [{ text: "¿Para qué fechas?" }]]);
+  });
+
+  test("two empty answers in a row fail with a clear message", async () => {
+    const { llm } = scriptedLlm([[{ text: "  " }], [{ text: "pienso…", thought: true }]]);
+    const { d } = deps(llm);
+    const err = await runTurn(newConversation(), "Bariloche", d).catch((e) => e);
+    expect(err).toBeInstanceOf(LlmError);
+    expect(err.message).toBe("Gemini devolvió una respuesta vacía dos veces. Probá de nuevo o reformulá el pedido.");
+  });
+
+  test("a slow model: the user is told it is thinking before the answer arrives", async () => {
+    const order: string[] = [];
+    const slow: Llm = {
+      async generate(_req, onText) {
+        order.push("model called");
+        await Bun.sleep(50);
+        onText("¿Qué fechas?");
+        return [{ text: "¿Qué fechas?" }];
+      },
+    };
+    await runTurn(newConversation(), "Bariloche", {
+      llm: slow,
+      now: NOW,
+      search: async () => ({ ok: true, result: result() }),
+      onModelCall: () => order.push("thinking shown"),
+      onText: (t) => order.push(`text: ${t}`),
+    });
+    expect(order).toEqual(["thinking shown", "model called", "text: ¿Qué fechas?"]);
+  });
+
+  test("model retries reach the caller so they can be shown", async () => {
+    const retrying: Llm = {
+      async generate(_req, onText, onWait) {
+        onWait?.({ status: 503, waitMs: 1000, attempt: 2 });
+        onText("Hola");
+        return [{ text: "Hola" }];
+      },
+    };
+    const waits: unknown[] = [];
+    await runTurn(newConversation(), "hola", {
+      llm: retrying,
+      now: NOW,
+      search: async () => ({ ok: true, result: result() }),
+      onModelWait: (w) => waits.push(w),
+    });
+    expect(waits).toEqual([{ status: 503, waitMs: 1000, attempt: 2 }]);
   });
 
   test("a model that keeps calling the tool is stopped", async () => {

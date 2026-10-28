@@ -49,6 +49,24 @@ describe("gemini", () => {
     expect(sleeps).toEqual([1000, 7000]);
   });
 
+  test("each retry is announced before waiting", async () => {
+    const { f } = fakeFetch([() => new Response("", { status: 503 }), () => sse(chunk({ text: "ok" }))]);
+    const waits: unknown[] = [];
+    await gemini(f).generate(req, () => {}, (info) => waits.push(info));
+    expect(waits).toEqual([{ status: 503, waitMs: 1000, attempt: 2 }]);
+  });
+
+  test("an exhausted quota that asks for a long wait fails at once instead of hanging", async () => {
+    sleeps.length = 0;
+    const quota = JSON.stringify({ error: { code: 429, details: [{ retryDelay: "3277s" }] } });
+    const { f, calls } = fakeFetch([() => new Response(quota, { status: 429 })]);
+    const err = await gemini(f).generate(req, () => {}).catch((e) => e);
+    expect(err).toBeInstanceOf(LlmError);
+    expect(err.message).toBe("Se agotó la cuota de Gemini (429): pide esperar unos 55 minutos. Probá más tarde o con otro modelo en GEMINI_MODEL.");
+    expect(calls).toHaveLength(1);
+    expect(sleeps).toEqual([]);
+  });
+
   test("when Gemini stays unavailable it fails with a clear message", async () => {
     const { f, calls } = fakeFetch(Array(4).fill(() => new Response("", { status: 503 })));
     const err = await gemini(f).generate(req, () => {}).catch((e) => e);

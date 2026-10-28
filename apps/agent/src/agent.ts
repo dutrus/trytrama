@@ -5,7 +5,7 @@
  * are compacted.
  */
 import { checkGrounding, type GroundingReport } from "./grounding.ts";
-import type { Content, Llm, Part } from "./llm.ts";
+import { type Content, type Llm, LlmError, type Part, type RetryInfo } from "./llm.ts";
 import { systemPrompt } from "./prompt.ts";
 import { type SearchResult, searchHotelsDeclaration, type ToolOutcome } from "./searchTool.ts";
 
@@ -19,6 +19,10 @@ export interface AgentDeps {
   onText?: (text: string) => void;
   /** Things the user should see that are not the model's answer (verification, correction). */
   onNotice?: (message: string) => void;
+  /** Called before each request to the model, so the user knows it is working. */
+  onModelCall?: () => void;
+  /** Called before the model layer retries (503, 429). */
+  onModelWait?: (info: RetryInfo) => void;
 }
 
 export interface ConversationState {
@@ -58,14 +62,26 @@ export async function runTurn(state: ConversationState, message: string, deps: A
 async function respond(state: ConversationState, deps: AgentDeps): Promise<{ text: string; searched: boolean }> {
   let text = "";
   let searched = false;
-  for (let round = 0; ; round++) {
-    const parts = await deps.llm.generate(
+  const generate = () => {
+    deps.onModelCall?.();
+    return deps.llm.generate(
       { system: systemPrompt(deps.now), contents: state.history, tools: [searchHotelsDeclaration] },
       (t) => {
         text += t;
         deps.onText?.(t);
       },
+      deps.onModelWait,
     );
+  };
+
+  for (let round = 0; ; round++) {
+    let parts = await generate();
+    if (isEmpty(parts)) {
+      // Seen with Gemini: a turn with no text and no tool call. Not kept in the history.
+      deps.onNotice?.("Gemini devolvió una respuesta vacía; reintento una vez.");
+      parts = await generate();
+      if (isEmpty(parts)) throw new LlmError("Gemini devolvió una respuesta vacía dos veces. Probá de nuevo o reformulá el pedido.");
+    }
     state.history.push({ role: "model", parts });
 
     const calls = parts.filter((p) => p.functionCall);
@@ -94,6 +110,11 @@ async function respond(state: ConversationState, deps: AgentDeps): Promise<{ tex
     }
     state.history.push({ role: "user", parts: responses });
   }
+}
+
+/** No visible text and no tool call (thought summaries and bare signatures do not count). */
+function isEmpty(parts: Part[]): boolean {
+  return !parts.some((p) => p.functionCall || (p.text?.trim() && !p.thought));
 }
 
 /** Replaces earlier search results in the history with a one-line summary. Model parts are never touched. */
