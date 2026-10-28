@@ -180,10 +180,15 @@ Un 400 de la API vuelve al modelo como error de la herramienta; si la API no est
   - las líneas escritas mientras el modelo responde quedan en cola;
   - el prompt aparece solo al terminar el turno;
   - el 503, la respuesta vacía y la cuota agotada muestran su aviso.
-- **Evals con Gemini real** (`evals.ts`, fecha de hoy fija en el miércoles 28/10/2026):
-  - **Pasaron:** 1, pedido completo (busca con los parámetros correctos y pasa la verificación); 2, sin fechas (no busca y pregunta las fechas); 3, "el finde que viene" (busca del 30/10 al 1/11 y lo dice); 4, un proveedor caído (avisa que B no respondió y pasa la verificación). El eval 4 usa un **resultado de búsqueda simulado** en el que falta B: prueba cómo el modelo maneja un proveedor faltante, no la cadena completa.
-  - **PENDIENTE:** el eval 5, destino inexistente. Lo cortó la cuota agotada.
-  - Los 4 que pasaron corrieron antes del arreglo del CLI y de los reintentos. PENDIENTE: volver a correr los 5 con el código actual.
+- **Evals con Gemini real** (`evals.ts`, fecha de hoy fija en el miércoles 28/10/2026), una corrida con el código actual:
+  - **Pasaron:** 1, pedido completo (busca con los parámetros correctos y pasa la verificación); 2, sin fechas (no busca y pregunta las fechas); 4, un proveedor caído (avisa que B no respondió y pasa la verificación). El eval 4 usa un **resultado de búsqueda simulado** en el que falta B: prueba cómo el modelo maneja un proveedor faltante, no la cadena completa.
+  - **5, destino inexistente:** en la corrida completa no llegó a correr: Gemini respondió 429 pidiendo esperar 24 s (límite por minuto) y el agente no espera más de 20 s. Corrido solo un minuto después, pasó (no buscó y nombró los 5 destinos).
+  - **3, "el finde que viene": falló.** Buscó del 6 al 8/11 en vez del 30/10 al 1/11 (dijo qué fechas usó). En una corrida anterior, con el mismo prompt y el mismo pedido a Gemini, había pasado: el resultado varía entre corridas. El arreglo está en "What I left out".
+  - En el eval 1 se vieron los reintentos con Gemini real: dos 429 (esperas de 11 s y 0 s) y siguió.
+- **Corridas reales para el PR** (`bun agent`, salida cruda en el PR):
+  1. Bariloche, pedido completo: B reintentó y quedó `partial` (20 hoteles, se cortó por tiempo); el agente lo avisó y la verificación pasó.
+  2. Mendoza sin fechas: no buscó y preguntó las fechas.
+  3. Salta con B caído (segunda API con B apuntando a un puerto vacío): B en `error`; el agente lo avisó y mostró A y C.
 
 ## What I left out
 
