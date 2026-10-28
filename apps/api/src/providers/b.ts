@@ -25,6 +25,8 @@ export interface ProviderBConfig {
   hedgeMs: number;
   /** USD -> ARS rate, valid until the day changes (UTC, like the provider). */
   fxCache: TtlCache<number>;
+  /** The rate load is shared between searches, so it has its own timeout instead of a search's signal. */
+  fxTimeoutMs: number;
   now: () => number;
 }
 
@@ -49,21 +51,29 @@ const defaultConfig = (): ProviderBConfig => ({
   // B's slowest normal answer is 2.5 s.
   hedgeMs: 2600,
   fxCache: sharedFxCache,
+  // Room for a hedge: 2.6 s plus another slow answer.
+  fxTimeoutMs: 6000,
   now: Date.now,
 });
 
 export function createProviderB(overrides: Partial<ProviderBConfig> = {}): ProviderAdapter {
   const config = { ...defaultConfig(), ...overrides };
 
-  // The load runs with the first caller's signal; if that search is aborted,
-  // concurrent callers waiting on the same load fail too. Rare: it loads once a day.
+  // The load runs on its own timeout; each search only stops waiting on its own signal.
   const usdArsRate = (opts: SearchOptions) =>
-    config.fxCache.getOrLoad("usd-ars", msUntilNextUtcDay(config.now()), async () => {
-      const body = await hedged((signal) => getJson(new URL("/api/v2/cotizacion", config.baseUrl), signal), config.hedgeMs, opts);
-      const rate = parseArs(body.data?.tipo_cambio);
-      if (rate === null || rate <= 0) throw new ProviderError("B", "error", `bad exchange rate ${body.data?.tipo_cambio}`);
-      return rate;
-    });
+    config.fxCache.getOrLoad(
+      "usd-ars",
+      msUntilNextUtcDay(config.now()),
+      async () => {
+        const loadOpts = { signal: AbortSignal.timeout(config.fxTimeoutMs), onRetry: opts.onRetry };
+        const url = new URL("/api/v2/cotizacion", config.baseUrl);
+        const body = await hedged((signal) => getJson(url, signal), config.hedgeMs, loadOpts);
+        const rate = parseArs(body.data?.tipo_cambio);
+        if (rate === null || rate <= 0) throw new ProviderError("B", "error", `bad exchange rate ${body.data?.tipo_cambio}`);
+        return rate;
+      },
+      opts.signal,
+    );
 
   return {
     id: "B",

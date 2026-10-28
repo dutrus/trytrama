@@ -183,6 +183,24 @@ describe("provider C adapter", () => {
     expect(taxCalls()).toBe(1);
   });
 
+  test("aborting one search does not fail others waiting on the same tax-table load", async () => {
+    const { adapter, taxCalls } = fakeC({
+      tax: async () => {
+        await Bun.sleep(150);
+        return taxRS();
+      },
+      avail: availRS,
+    });
+    const quitter = new AbortController();
+    const first = adapter.search(params, { signal: quitter.signal });
+    const second = adapter.search(params, opts());
+    setTimeout(() => quitter.abort(new Error("search deadline")), 50);
+
+    await expect(first).rejects.toThrow("search deadline");
+    expect(await second).toHaveLength(2);
+    expect(taxCalls()).toBe(1);
+  });
+
   test("fails if the tax table fails (no fallback to the manual's table)", async () => {
     const { adapter } = fakeC({ tax: () => fault("GDS-422", "Invalid request data"), avail: availRS });
     await expect(adapter.search(params, opts())).rejects.toThrow("GDS-422");

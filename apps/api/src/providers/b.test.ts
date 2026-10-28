@@ -231,6 +231,33 @@ describe("provider B adapter", () => {
     expect(searches).toHaveLength(1);
   });
 
+  test("aborting one search does not fail others waiting on the same exchange-rate load", async () => {
+    const { adapter, fxCalls } = fakeB({
+      fx: async () => {
+        await Bun.sleep(150);
+        return Response.json(fx());
+      },
+      pages: () => Response.json(page([hotel(1)])),
+    });
+    const quitter = new AbortController();
+    const first = adapter.search(params, { signal: quitter.signal });
+    const second = adapter.search(params, opts());
+    setTimeout(() => quitter.abort(new Error("search deadline")), 50);
+
+    await expect(first).rejects.toThrow("search deadline");
+    expect(await second).toHaveLength(1);
+    expect(fxCalls()).toBe(1);
+  });
+
+  test("the exchange-rate load gives up on its own timeout", async () => {
+    const { adapter } = fakeB(
+      { fx: (req) => hang(req), pages: () => Response.json(page([hotel(1)])) },
+      { fxTimeoutMs: 100 },
+    );
+    const err = await adapter.search(params, opts()).catch((e) => e);
+    expect((err as Error).name).toBe("TimeoutError");
+  });
+
   test("caches the exchange rate until the UTC day changes", async () => {
     let now = Date.UTC(2026, 9, 28, 23, 0);
     const { adapter, fxCalls } = fakeB(

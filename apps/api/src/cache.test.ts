@@ -26,6 +26,24 @@ describe("TtlCache", () => {
     expect(loads).toBe(1);
   });
 
+  test("a waiter that aborts stops waiting without cancelling the shared load", async () => {
+    const cache = new TtlCache<number>();
+    let loads = 0;
+    const load = async () => {
+      loads++;
+      await Bun.sleep(50);
+      return 42;
+    };
+    const quitter = new AbortController();
+    const first = cache.getOrLoad("k", 1000, load, quitter.signal);
+    const second = cache.getOrLoad("k", 1000, load, new AbortController().signal);
+    quitter.abort(new Error("gave up"));
+    await expect(first).rejects.toThrow("gave up");
+    expect(await second).toBe(42);
+    expect(cache.get("k")).toBe(42);
+    expect(loads).toBe(1);
+  });
+
   test("getOrLoad does not cache a failed load", async () => {
     const cache = new TtlCache<number>();
     await expect(cache.getOrLoad("k", 1000, () => Promise.reject(new Error("boom")))).rejects.toThrow("boom");

@@ -27,6 +27,8 @@ export interface ProviderCConfig {
   /** C's limit is per account, so every search shares one limiter. */
   limiter: RateLimiter;
   taxCache: TtlCache<TaxTable>;
+  /** The tax table load is shared between searches, so it has its own timeout instead of a search's signal. */
+  taxTimeoutMs: number;
 }
 
 const IATA: Record<Destination, string> = { bariloche: "BRC", mendoza: "MDZ", salta: "SLA", florianopolis: "FLN", cancun: "CUN" };
@@ -74,14 +76,24 @@ const defaultConfig = (): ProviderCConfig => ({
   password: process.env.PROVIDER_C_PASSWORD ?? "demo",
   limiter: sharedLimiter,
   taxCache: sharedTaxCache,
+  // C answers in up to 3 s; room for one GDS-503 retry.
+  taxTimeoutMs: 6000,
 });
 
 export function createProviderC(overrides: Partial<ProviderCConfig> = {}): ProviderAdapter {
   const config = { ...defaultConfig(), ...overrides };
 
-  // Loaded with the first caller's signal; concurrent callers share that load.
+  // The load runs on its own timeout; each search only stops waiting on its own signal.
   const taxTable = (opts: SearchOptions) =>
-    config.taxCache.getOrLoad("taxes", TAX_TTL_MS, async () => parseTaxes(await call(config, "<HotelTaxRQ/>", opts)));
+    config.taxCache.getOrLoad(
+      "taxes",
+      TAX_TTL_MS,
+      async () => {
+        const loadOpts = { signal: AbortSignal.timeout(config.taxTimeoutMs), onRetry: opts.onRetry };
+        return parseTaxes(await call(config, "<HotelTaxRQ/>", loadOpts));
+      },
+      opts.signal,
+    );
 
   return {
     id: "C",
