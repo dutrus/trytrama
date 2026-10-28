@@ -103,7 +103,7 @@ Los tres proveedores se consultan en paralelo y cada resultado sale por el strea
 
 B es el más lento: cada página tarda de 0,8 a 2,5 s y van una tras otra, así que con dos páginas puede llegar a unos 5 s. Si además una página necesita el segundo pedido, puede vencer el tope y B queda incompleto. C pasa por un limitador propio de 5 pedidos por segundo con ráfaga de 4, no de 5 como el servidor: el primer pedido también abre la conexión y le llega a C más tarde de lo que lo contamos, y con ráfaga de 5 el sexto pedido llegaba antes de tiempo y recibía un 429. Con ráfaga de 4 queda un turno de margen sin bajar la tasa.
 
-**Cuándo mando `done`:** espero hasta un tope de unos 5,5 s (PENDIENTE confirmar con `bun run load`). Prioricé completitud sobre rapidez: una agente pierde más si se pierde la mejor tarifa que si espera un poco más, y mientras tanto ya ve resultados y avisos de qué falta. Descarté un tope de 1,5 s: sería más rápido, pero casi siempre perdería a C.
+**Cuándo mando `done`:** cuando terminaron los tres proveedores o a los 5,5 s, lo que pase primero. La medición lo confirma: B llega a `ok` con p99 de 4,9 s, así que un tope menor lo perdería más seguido. Prioricé completitud sobre rapidez: una agente pierde más si se pierde la mejor tarifa que si espera un poco más, y mientras tanto ya ve resultados y avisos de qué falta. Descarté un tope de 1,5 s: sería más rápido, pero casi siempre perdería a C.
 
 | Qué se guarda | Cuánto | Por qué |
 |---|---|---|
@@ -112,7 +112,23 @@ B es el más lento: cada página tarda de 0,8 a 2,5 s y van una tras otra, así 
 | Tabla de impuestos de C | 1 hora | Cambia poco y C tiene límite de pedidos |
 | Búsquedas con un proveedor caído | No se guardan | Para no repetir una falla |
 
-**Resultados de `bun run load`:** PENDIENTE.
+**Resultados de `bun run load`** (200 búsquedas, 10 a la vez, chaos activo con `CHAOS_SEED=ci`, `bun dev` reiniciado antes de cada medición). La caché de búsquedas completas dura 90 s y es solo para búsquedas en las que los tres proveedores terminaron en `ok`; un acierto repite los eventos con `cached: true`.
+
+| Medición | Sin caché (p50 / p95 / p99) | Con caché (p50 / p95 / p99) |
+|---|---|---|
+| Primer evento (`search_started`) | 1 / 5 / 7 ms | 1 / 5 / 7 ms |
+| Primer hotel (`firstHotelMs`) | 263 / 401 / 628 ms | 0 / 374 / 467 ms |
+| `done` | 3025 / 5504 / 5513 ms | 2 / 4948 / 5513 ms |
+| Aciertos de caché | — | 104 de 200 |
+| Búsquedas completas | 186 de 200 | 196 de 200 |
+| Duración de la corrida | 65,4 s | 34,2 s |
+| Tasa de error | 0,00% | 0,00% |
+
+Primer evento y `done` salen de `bun run load`. Primer hotel, aciertos y búsquedas completas salen de un script aparte con la misma mezcla de tráfico, que lee el `done` de cada búsqueda. Con caché, el primer hotel de las 96 búsquedas en vivo da 262 / 433 / 695 ms.
+
+- **El primer evento sale a los pocos ms porque es `search_started`**, que se manda apenas se abre el stream y no depende de ningún proveedor. Por eso reporto también el primer hotel: es lo que de verdad ve la agente, viene de A y llega con p95 de unos 400 ms.
+- **El `done` p95 coincide con el tope** porque, sin caché, 13 de 200 búsquedas (6,5%) lo alcanzan, todas por B: pagina de a 20, las páginas van una tras otra y, si una necesita el pedido de cobertura, no llega. En esas búsquedas B termina en `partial` (11) o `timeout` (2).
+- **La caché mejora el p50 del `done`** (de 3 s a 2 ms, porque el 60% del tráfico repite 10 búsquedas) **pero casi no el p99** (5,5 s en los dos casos): las búsquedas nuevas siguen esperando a B. Había estimado p50 de unos 5 ms, p95 de unos 4,7 s y 103 aciertos, y la medición dio 2 ms, 4,9 s y 104.
 
 ## Failures
 
@@ -150,6 +166,9 @@ El cliente ve un `provider_status` por proveedor (`ok`, `retrying`, `timeout`, `
 - **Confirmación de precio al reservar:** el precio mostrado es indicativo.
 - **Dedup perfecto:** un dedup perfecto no está garantizado con proveedores reales; el 0 de errores medido es optimista por lo limpio del simulador.
 - **Evento para fusionar filas ya enviadas:** resolvería el empate por orden de llegada (ver "Dónde se equivoca"), a costa de que el cliente tenga que poder unir o quitar filas.
+- **Subir el tope del `done`:** recuperaría parte de las búsquedas en que B queda incompleto, a costa de que todas las búsquedas nuevas en que B tarda esperen más.
+- **Pedir las páginas de B en paralelo:** bajaría el tiempo de B, pero hoy no se puede, porque el cursor es opaco y cada página necesita el cursor de la anterior.
+- **Coalescing de búsquedas idénticas en curso:** con esta carga solo se habrían unido 6 pedidos de 200, porque casi nunca coinciden dos iguales en el mismo momento. Si se agrega, la desconexión de un cliente no debe cancelar una búsqueda que otros siguen esperando.
 - **Datos que la agente debería pedir antes de buscar** (destino, fechas, personas): hoy lo resuelve el agente preguntando.
 - PENDIENTE: lo que no llegue a hacer.
 
