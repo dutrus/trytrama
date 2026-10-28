@@ -15,7 +15,9 @@ No inventes requisitos ni hagas cambios fuera de lo que te pedí.
 ## Trampas de los proveedores (los manuales mienten)
 - A: puede faltar starRating y refundable. Guardar null, no inventar.
 - B: números "1.234.567,89" y fechas DD/MM/YYYY. Si impuestos_incluidos es false, sumar "impuestos". El 5% de los pedidos nunca responde.
+- B: ignora limite=50 y pagina de a 20. Puede traer categoria "Boutique", coordenadas null y régimen todo_incluido.
 - C: tarifa neta por noche. La tabla de impuestos real sale de HotelTaxRQ; la del manual está desactualizada. Sin coordenadas. Límite 5 req/s.
+- C: los errores llegan como HTTP 200 con <Fault>. Nombres truncados a 24 caracteres y con entidades XML: la señal de nombre del dedup tiene que tolerar que un nombre sea prefijo de otro.
 - Gemini devuelve el destino con mayúscula ("Bariloche"): normalizar.
 - Los mensajes del modelo van ENTEROS en el historial (thoughtSignature); solo se compactan los resultados de búsqueda.
 
