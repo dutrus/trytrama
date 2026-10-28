@@ -39,26 +39,19 @@ It doesn't need to be polished.
 
 ---
 
-## Session 3 (en curso)
+## Session 3
 
 - **Tool / model:** Claude Code y Claude (chat)
 - **Goal:** Regla para decidir cuándo dos resultados son el mismo hotel.
-- **What went well:** Pedí que probara la regla sobre los datos reales de los 5 destinos y me mostrara las uniones una por una, para revisarlas a ojo antes de escribir código.
-- **What went wrong or had to be corrected:** PENDIENTE
+- **What went well:** Pedí que probara la regla sobre los datos reales de los 5 destinos y me mostrara las uniones una por una, para revisarlas a ojo antes de escribir código. Así se vio que la primera regla (siempre exigir estrellas o coordenadas que confirmaran) separaba 9 pares que eran el mismo hotel, y cambié a nombre exacto más calle y número.
+- **What went wrong or had to be corrected:** Medida contra el catálogo del simulador, la regla dio 0 errores, y desconfié del resultado perfecto. Pedí romper la regla a propósito para comprobar que la medición detectaba errores: ignorar la calle o el nombre no produjo ninguno (el simulador es demasiado limpio, esas comprobaciones solo las cubren los tests unitarios), y con roturas más fuertes sí aparecieron. Además pedí un test del error caro (dos hoteles distintos con el mismo nombre y dirección se unen), que no existía.
 - **What you decided, not the AI:**
   - Separar los datos que identifican al hotel (nombre, calle, número) de los que lo confirman (estrellas, coordenadas), en vez de contarlos todos igual.
   - Adoptar la regla de nombre exacto: sube de 111 a 120 uniones sin perder ninguna.
-  - Medirla contra el catálogo del simulador usado como respuesta correcta, solo en un script descartable fuera del repo. Nada en `apps/` depende de él, y en un sistema real esa respuesta no existe.
-  - Resultado de esa medición: - **What went wrong or had to be corrected:** La primera regla exigía un refuerzo (estrellas o coordenadas) siempre, y separaba 9 pares que eran el mismo hotel. Lo vimos al medirla contra datos reales, y cambié a nombre exacto más calle y número. Al validar la medición, romper la regla ignorando calle o nombre no produjo errores: el simulador es demasiado limpio, y esas comprobaciones solo están cubiertas por tests unitarios.
-- Resultado de la medición contra el catálogo del simulador: 195 hoteles, 6 estadías y 3 órdenes de llegada, 0 uniones erróneas y 0 separados. Un resultado optimista: el simulador usa la misma dirección en todos los proveedores.
-
----
-
-## Session 3 (cierre)
-
-- **What went well:** Pedí que la regla de dedup se probara sobre los datos reales de los 5 destinos y que me mostraran las uniones una por una antes de escribir código. Así se vio que la primera regla (siempre exigir estrellas o coordenadas) separaba 9 pares que eran el mismo hotel, y cambié a nombre exacto más calle y número.
-- **What went wrong or had to be corrected:** Medida contra el catálogo del simulador, la regla dio 0 errores, y desconfié del resultado perfecto. Pedí romper la regla a propósito para comprobar que la medición detectaba errores: ignorar la calle o el nombre no produjo ninguno (el simulador es demasiado limpio, esas comprobaciones solo las cubren los tests unitarios), y con roturas más fuertes sí aparecieron. Además pedí un test del error caro (dos hoteles distintos con el mismo nombre y dirección se unen), que no existía.
-- **What you decided, not the AI:** Separar los datos que identifican al hotel de los que lo confirman. Adoptar la regla de nombre exacto. No presentar Los Coihues como un error actual sino como historia de la regla anterior. Dejar la caché y el coalescing para después de medir el load test sin caché, para tener un antes y un después.
+  - No presentar Los Coihues como un error actual sino como historia de la regla anterior.
+  - Medir la regla contra el catálogo del simulador usado como respuesta correcta, solo en un script descartable fuera del repo. Nada en `apps/` depende de él, y en un sistema real esa respuesta no existe.
+  - Dejar la caché y el coalescing para después de medir el load test sin caché, para tener un antes y un después.
+- **Resultado de la medición:** 195 hoteles, 6 estadías y 3 órdenes de llegada, 0 uniones erróneas y 0 separados. Es un resultado optimista: el simulador usa la misma dirección en todos los proveedores.
 
 ---
 
@@ -66,15 +59,22 @@ It doesn't need to be polished.
 
 - **Tool / model:** Claude Code (código) y Claude (chat, revisión de cada plan)
 - **Goal:** Orquestador, `/search` con SSE, load test, caché y agente con Gemini.
-- **What went well:** En cada paso pedí el plan antes del código y lo revisé. Medí `bun run load` con el ruido activo (`CHAOS_SEED=ci`) y reinicié `bun dev` antes de cada medición para que el antes y el después fueran comparables: primer evento p95 de 5 ms, 0% de errores. Como el primer evento es `search_started`, pedí medir también el tiempo al primer hotel (p95 de 401 ms). Antes de agregar `roomType` a la API verificó con datos reales que los tres proveedores usan los mismos 6 códigos.
+- **What went well:**
+  - En cada paso pedí el plan antes del código y lo revisé.
+  - Medí `bun run load` con el ruido activo (`CHAOS_SEED=ci`) y reinicié `bun dev` antes de cada medición para que el antes y el después fueran comparables: primer evento p95 de 5 ms y 0% de errores. Como el primer evento es `search_started`, pedí medir también el tiempo al primer hotel (p95 de 401 ms).
+  - Antes de agregar `roomType` a la API, Claude Code verificó con datos reales que los tres proveedores usan los mismos 6 códigos.
+  - Las 3 corridas reales del agente para el PR salieron con el ruido real del simulador: en una, B terminó en `partial` y el agente lo avisó; en otra, con B caído, mostró A y C.
+  - Antes de entregar le pedí a Claude Code que comparara las afirmaciones concretas de `DESIGN.md` con el código (el tope de 5,5 s, los 2,6 s de B, la caché de 90 s, el limitador de C, los reintentos, los eventos y los estados, entre otras). Todo coincidía salvo dos detalles: el DESIGN no mencionaba que C reintenta como máximo 2 veces ante un 429, y el encabezado `# Design` estaba repetido. Lo corregí a mano. Solo se pudo comprobar lo que tiene un número o un nombre en el código; no revisó cada frase de razonamiento.
 - **What went wrong or had to be corrected:**
   - Al verificar la API con los proveedores en `CHAOS=off` los tiempos eran de milisegundos y no servían para medir. Lo noté por los registros y reinicié con el ruido activo.
   - Un artículo al inicio de una oración ("El Hotel Catedral") hacía que la verificación del agente tomara un hotel existente como desconocido. Lo encontró y lo corrigió Claude Code antes de commitear.
-  - Probando el agente a mano en PowerShell encontré dos fallos que los tests con modelo falso no veían: el prompt `>` aparecía en medio de la respuesta anterior, y después de escribir mi respuesta no salía nada. Las pruebas de Claude Code habían usado entrada por pipe, no el modo interactivo. PENDIENTE: causa y arreglo.
+  - Probando el agente a mano en PowerShell encontré dos fallos que los tests con modelo falso no veían: el prompt `>` aparecía en medio de la respuesta anterior y, después de escribir mi respuesta, no salía nada. Mi primer diagnóstico (con el chat) apuntaba al modo interactivo del CLI y no era la causa principal: Gemini respondía 429 por cuota agotada con una espera de unos 55 minutos, y la capa de Gemini esperaba en silencio. Claude Code lo reprodujo en un pseudo-terminal y lo confirmó. Además encontró que lo escrito mientras el modelo respondía se perdía y que una respuesta vacía no se manejaba. Arreglo: esperas máximas de 20 s, avisos "Pensando…" y de cada reintento, y reintento ante respuesta vacía.
+  - El eval de "el finde que viene" pasó una vez y falló otra con el mismo prompt y el mismo pedido a Gemini: el modelo eligió otro fin de semana. Siempre declaró las fechas que usaba, pero la regla vive solo en el prompt y no es determinística.
+  - Dos datos que yo había pasado a Claude Code (que el eval 5 no había corrido y que el eval 3 falló "con el mismo código") eran incorrectos; los verificó contra git y contra la corrida real antes de escribirlos en DESIGN.
 - **What you decided, not the AI:**
   - Esperar la medición sin caché antes de implementar la caché.
   - Poner `roomType` en la API y no traducir los nombres de habitación solo en el agente.
   - Que el pie con el estado de los proveedores lo imprima el código y no dependa del modelo.
   - Que el agente sea conversacional, con historial.
   - Probar el agente a mano además de con tests, y pedir la salida cruda de cada corrida, sin resumir.
-    - Causa del "se queda parado" y de que "tarda mucho": Gemini respondía 429 por cuota agotada con una espera de unos 55 minutos, y la capa de Gemini esperaba en silencio. Yo sospeché del modo interactivo del CLI y esa no era la causa principal; Claude Code lo reprodujo en un pseudo-terminal y lo confirmó. Además encontró que lo escrito mientras el modelo respondía se perdía y que una respuesta vacía no se manejaba. Arreglo: esperas máximas de 20 s, avisos "Pensando…" y de cada reintento, y reintento ante respuesta vacía.
+  - Documentar el fallo del eval 3 y dejar el arreglo (calcular en código las fechas del fin de semana) para después de abrir el PR, en vez de parcharlo a último momento.
