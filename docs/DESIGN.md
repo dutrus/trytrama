@@ -30,6 +30,7 @@ Cliente (agente de viajes o agente de IA)
         |
    Eventos SSE: search_started, hotel, offer, provider_status, done
 ```
+> Este resumen es la versión corta. Cada punto se explica con más precisión en las secciones de abajo, y las tablas completas de medición y los límites están en [DESIGN-detalle.md](DESIGN-detalle.md).
 
 ## Schema and events
 
@@ -221,8 +222,17 @@ Un 400 de la API vuelve al modelo como error de la herramienta; si la API no est
 <!-- Short summary: what you used it for, where it helped, where it got things wrong and how you noticed.
      Details go in AI_LOG.md. -->
 
-Usé Claude en el chat para entender el problema y tomar las decisiones de diseño, y Claude Code para escribir el código, pidiéndole el plan antes y aprobando cada paso. Me ayudó a encontrar que los manuales de los proveedores no coincidían con la realidad (impuestos de B y de C, paginación de B, errores de C como HTTP 200).
+**Para qué la usé.** Usé Claude en el chat para entender el problema, diseccionarlo en capas y tomar las decisiones de diseño, y Claude Code para escribir los adaptadores, el dedup, el orquestador y el agente, siempre pidiéndole primero el plan y aprobando cada paso. Un `CLAUDE.md` le fijó las reglas duras: no tocar `providers/`, no leer el `.env` y avanzar de a un paso.
 
-Dónde se equivocó o tuve que corregirlo: el chat me dio un conteo erróneo de hoteles (19 en vez de 20) y diagnosticó mal un fallo del CLI, que atribuyó al modo interactivo cuando la causa principal era una cuota agotada de Gemini; Claude Code lo reprodujo y lo corrigió. Dos datos incorrectos que yo le había pasado sobre los evals los verificó contra git antes de escribirlos. Con el modelo me topé con un 404 y un 503 de Gemini, y mi script de prueba hacía fallar el typecheck del CI. Antes de entregar, Claude Code comparó las afirmaciones concretas de este documento con el código y encontré dos diferencias menores, que corregí.
+**Dónde ayudó.**Probando contra los proveedores reales me ayudó a encontrar lo que los manuales no decían: B pagina de a 20 aunque se pida `limite=50`, a veces no incluye impuestos, y C devuelve sus errores como HTTP 200 con un `<Fault>`. También midió el dedup contra el catálogo del simulador y rompió la regla a propósito para comprobar que la medición detectaba errores.
 
-Lo que decidí yo: esperar más por más opciones antes del `done` pero avisando qué falta, no unir hoteles ante la duda, separar los datos que identifican un hotel de los que lo confirman, medir antes de agregar caché y que el agente sea conversacional. Detalle en `AI_LOG.md`.
+**Dónde se equivocó o tuve que corregirlo, y cómo lo noté.**
+- El chat me dijo que A devolvía 19 hoteles para Bariloche y eran 20. Lo vi al probar contra el proveedor real.
+- Diagnosticó mal un fallo del CLI: lo atribuyó al modo interactivo, y la causa principal era una cuota agotada de Gemini que dejaba la espera en silencio. Claude Code lo reprodujo en un pseudo-terminal y lo corrigió.
+- Dos datos que yo le pasé sobre los evals eran incorrectos; los verificó contra git antes de escribirlos.
+- Mi script de prueba hacía fallar `bun typecheck` en el CI. Lo detectó Claude Code al revisar.
+- Antes de entregar, una sesión nueva de Claude Code, sin el contexto de la construcción, hice que comparara este documento con el código y encontró dos afirmaciones falsas: que el id del hotel era estable entre búsquedas y que cambiar de proveedor de LLM tocaba un solo archivo. Las corregí.
+
+**Lo que decidí yo.** Esperar más por más opciones antes del `done`, avisando qué falta. No unir hoteles ante la duda. Separar los datos que identifican un hotel de los que lo confirman. Medir antes de agregar la caché. Que el agente sea conversacional. Y documentar los fallos de los evals en vez de parchearlos.
+
+Detalle de cada sesión en `AI_LOG.md`.
