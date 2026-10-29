@@ -152,7 +152,7 @@ La cotización de B y la tabla de impuestos de C son cargas compartidas entre b�
 
 **Modelo.** `gemini-3.5-flash`. Tiene capa gratuita sin tarjeta, soporta llamar herramientas (lo comprobé con una prueba) y alcanza para una sola herramienta con parámetros simples. Probé antes `gemini-2.5-flash` (ya no está disponible para cuentas nuevas) y `gemini-3.8-flash` (503 por demanda). Consideré Groq (más rápido, solo modelos abiertos) y DeepSeek (requiere saldo).
 
-El modelo se configura con `GEMINI_MODEL` y queda detrás de una capa chica (`llm.ts`, `fetch` directo, sin SDK). Cambiar de proveedor no es tocar un solo archivo: además de `llm.ts`, cambia cómo `agent.ts` guarda el historial, que usa el formato de Gemini (`role: "model"`, `functionCall`, `functionResponse`). La mejora sería un formato de mensajes neutral que `llm.ts` traduzca a cada proveedor.
+El modelo se configura con `GEMINI_MODEL` y queda detrás de una capa chica (`llm.ts`, `fetch` directo, sin SDK). Cambiar de proveedor no es tocar un solo archivo: además de `llm.ts`, cambia cómo `agent.ts` guarda el historial, que usa el formato de Gemini (`role: "model"`, `functionCall`, `functionResponse`), y `index.ts` y `evals.ts` crean el cliente con `createGemini()`. La mejora sería un formato de mensajes neutral que `llm.ts` traduzca a cada proveedor.
 
 **Límite real de la capa gratuita:** se agotó con pocas decenas de pedidos en una sesión de desarrollo (evals y pruebas); después Gemini respondió 429 pidiendo esperar unos 55 minutos. Eso explica el manejo de reintentos.
 
@@ -280,7 +280,7 @@ Medición contra el catálogo del simulador: 585 filas (195 hoteles reales en ca
 
 **Relajar el dedup con nombre exacto.** Unir con nombre exacto, calle y número sin pedir refuerzo recupera 9 pares reales que la regla estricta separaba, y abre la puerta al error caro: dos hoteles distintos con el mismo nombre y la misma dirección. Lo tomé porque el primer problema existe en los datos y el segundo no, y el segundo tiene su test.
 
-**El agente atado a Gemini.** La capa `llm.ts` es chica y sin SDK, pero el historial de `agent.ts` usa el formato de Gemini. Cambiar de proveedor toca los dos archivos. Elegí Gemini por su capa gratuita sin tarjeta, y el formato de mensajes neutral que lo desataría queda en la sección 6.
+**El agente atado a Gemini.** La capa `llm.ts` es chica y sin SDK, pero el historial de `agent.ts` usa el formato de Gemini, e `index.ts` y `evals.ts` crean el cliente con `createGemini()`. Cambiar de proveedor toca esos cuatro archivos. Elegí Gemini por su capa gratuita sin tarjeta, y el formato de mensajes neutral que lo desataría queda en la sección 6.
 
 **Parser XML propio.** Ahorro una dependencia a cambio de no soportar CDATA, comentarios ni namespaces. Si C los empieza a usar, el adaptador falla con error en vez de devolver datos inventados.
 
