@@ -19,6 +19,7 @@ It doesn't need to be polished.
   - Que el agente sea conversacional (con historial), no de una sola respuesta.
   - Usar Gemini, y dejar Groq y DeepSeek anotadas como alternativas.
   - Que el reintento a B corra por detrás mientras el stream sigue abierto.
+  - Propuse la regla inicial de 4 de 5 señales; la dividí en núcleo y refuerzo cuando vi que se podía cumplir sin que coincidiera la calle
 
 <!-- Transcript or relevant excerpts (optional) -->
 

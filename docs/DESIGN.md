@@ -68,6 +68,7 @@ Cada hotel que llega se compara contra cada fuente de los hoteles ya emitidos:
 - **Nombre por tolerancia** (un nombre de C cortado a 24 caracteres): además hace falta un refuerzo presente en los dos y coincidente, es decir, mismas estrellas o coordenadas a 150 m o menos.
 - Un refuerzo presente que se contradice (estrellas distintas, coordenadas a más de 150 m) impide la unión; uno ausente no cuenta ni a favor ni en contra.
 - Nunca se unen dos hoteles del mismo proveedor, y si dos hoteles ya emitidos califican (empate), no se une con ninguno.
+- **De dónde sale la regla.** Arranqué con "unir si coinciden 4 de 5 señales" (nombre, calle, número, estrellas y coordenadas), con la idea de que ante la duda no se une y se explica. Contadas todas por igual, esa regla se podía cumplir sin que coincidiera la calle, así que separé los datos que identifican al hotel (nombre, calle y número, obligatorios) de los que lo confirman (estrellas o coordenadas). Después la medí contra datos reales y vi que exigir siempre un dato de confirmación separaba 9 pares del mismo hotel, y relajé el caso del nombre exacto (más abajo, "La regla anterior").
 
 Como los proveedores contestan en momentos distintos, la comparación corre cada vez que llega un proveedor: si se une, sale un `offer`; si no, un `hotel`.
 
