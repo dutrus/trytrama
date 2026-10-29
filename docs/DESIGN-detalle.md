@@ -303,8 +303,34 @@ Medición contra el catálogo del simulador: 585 filas (195 hoteles reales en ca
 - **Detectar una unión errónea en producción:** hoy no la detectaría solo. Haría falta medir contra una muestra revisada a mano, o contra un identificador común entre proveedores, y sumar señales que distingan hoteles gemelos (teléfono, o el código de la propiedad que dan algunos proveedores).
 - **Datos que la agente debería pedir antes de buscar** (destino, fechas, personas): hoy lo resuelve el agente preguntando.
 - **Una oferta por línea:** en una corrida real, el modelo escribió "Doble (o Doble twin)" para un mismo hotel, mezclando dos ofertas en una línea. La verificación no lo detecta.
-- **Formato de mensajes neutral** entre `agent.ts` y `llm.ts`, para cambiar de proveedor de LLM tocando solo la capa.
+- **Formato de mensajes neutral** entre `agent.ts` y `llm.ts`, para cambiar de proveedor de LLM tocando solo la capa. Lo detallo abajo, con OpenRouter como caso concreto.
 - **Lo que no llegué a hacer:** una prueba de estrés del dedup con datos alterados a propósito (direcciones escritas distinto, hoteles gemelos), porque la medición contra el simulador no ejercita algunas reglas; y un test automático del modo interactivo del CLI (lo probé a mano en un pseudo-terminal, pero no entra en `bun test`).
+
+### OpenRouter además de Gemini
+
+Durante el take-home recibí una key de OpenRouter, con la sugerencia de probar gpt-luna, DeepSeek o Haiku. No llegué a integrarla. Dejo escrito qué cambiaría, porque es la mejor forma de mostrar cuánto depende hoy el agente de Gemini.
+
+**Cuánto depende hoy.** Que `llm.ts` sea "una capa chica" no significa que el resto no sepa de Gemini. La interfaz `Llm` está definida con los tipos de Gemini: `generate` recibe y devuelve `Content` y `Part`, que son las partes de Gemini con `functionCall`, `functionResponse`, `thought` y `thoughtSignature`. Esos tipos atraviesan el resto del agente:
+
+- **`agent.ts`** guarda el historial con `role: "model"` y `parts`, busca las llamadas a la herramienta filtrando `functionCall`, devuelve los resultados como `functionResponse`, decide que una respuesta está vacía mirando `thought`, y `compactOldResults` recorre las partes buscando `functionResponse`. Los avisos dicen "Gemini devolvió una respuesta vacía".
+- **`index.ts` y `evals.ts`** crean el cliente con `createGemini()` y escriben "Gemini ocupado" en cada reintento.
+- **`llm.ts`** lee `GEMINI_API_KEY` y `GEMINI_MODEL`, interpreta el `retryDelay` que Gemini manda en el cuerpo de un 429, y sus mensajes de error nombran a Gemini.
+- **Los tests** de `agent.ts` y `llm.ts` arman las respuestas falsas con partes de Gemini.
+
+No dependen de Gemini `grounding.ts`, que trabaja sobre el texto final, `prompt.ts`, y la declaración de la herramienta en `searchTool.ts`, que es un JSON Schema que el formato de OpenAI acepta tal cual dentro de su envoltorio de `tools`.
+
+**Qué haría.**
+
+1. **Un formato de mensajes propio** en `llm.ts`: mensajes de usuario, del modelo (texto y llamadas a herramientas con su id) y resultados de herramientas, más un campo opaco por mensaje donde cada proveedor guarda lo que necesita recibir de vuelta. Gemini guardaría ahí sus partes enteras, `thoughtSignature` incluida, para seguir reenviándolas sin tocarlas.
+2. **`agent.ts` habla solo ese formato.** El historial, la búsqueda de llamadas, la compactación y la detección de respuesta vacía pasan a trabajar sobre mensajes propios. La regla de no compactar los mensajes del modelo se mantiene.
+3. **Dos implementaciones de `Llm`:** la de Gemini, que traduce al formato actual, y una para el formato de chat completions de OpenAI (mensajes con `tool_calls`, resultados con rol `tool` y `tool_call_id`, streaming donde los argumentos de una llamada llegan en fragmentos que hay que juntar). Ese formato lo hablan OpenRouter y también OpenAI, Groq, DeepSeek y servidores locales como Ollama, así que una implementación cubre a todos cambiando dirección, key y modelo.
+4. **Selección por variables de entorno:** `LLM_PROVIDER` elige la implementación, la key de OpenRouter va en `OPENROUTER_API_KEY` y el modelo en su propia variable, sin uno por defecto elegido por mí. La key nunca aparece en mensajes ni logs, igual que hoy.
+5. **Reintentos compartidos:** el tope de 20 s y los avisos quedan iguales; lo que cambia por proveedor es de dónde sale la espera (`Retry-After` en los dos, `retryDelay` solo en Gemini) y el texto de los errores.
+6. **Tests con un servidor falso, sin red**, igual que los de Gemini: streaming de texto, una llamada a herramienta que llega en fragmentos, reintentos y que la key no se filtre.
+
+**Lo que no resuelve.** Soportar el formato no garantiza que el modelo use bien la herramienta: eso depende del modelo, y uno chico puede no llamarla o llamarla mal aunque el código funcione. Por eso los 5 evals tendrían que correr de nuevo con cada modelo; un cambio de proveedor puede mover cuándo pregunta las fechas o cómo escribe los precios. Tampoco sería "compatible con cualquier LLM": serían dos formatos, y otro formato (por ejemplo el de Anthropic) sería otra implementación.
+
+**Por qué quedó afuera.** Con Gemini el agente ya andaba, con sus tests y sus evals. Sumar un segundo proveedor tocaba el núcleo del agente y sus tests, y sin correr los evals con el modelo nuevo habría sido agregar un camino que no probé con un modelo real.
 
 ## 7. Cómo usé la IA
 
