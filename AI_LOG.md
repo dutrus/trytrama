@@ -77,3 +77,4 @@ It doesn't need to be polished.
   - Que el agente sea conversacional, con historial.
   - Probar el agente a mano además de con tests, y pedir la salida cruda de cada corrida, sin resumir.
   - Documentar el fallo del eval 3 y dejar el arreglo (calcular en código las fechas del fin de semana) para después de abrir el PR, en vez de parcharlo a último momento.
+  - Me ofrecieron una key de OpenRouter para probar el agente con otro modelo. Decidí no sumar soporte antes de entregar: el agente está acoplado al formato de Gemini (lo marcó la revisión independiente) y cambiarlo toca cómo se guarda el historial, lo que podía romper lo que ya funcionaba. Lo dejé documentado en DESIGN como lo siguiente a hacer.
