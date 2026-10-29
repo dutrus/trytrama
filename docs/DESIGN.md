@@ -154,6 +154,14 @@ El cliente ve un `provider_status` por proveedor (`ok`, `partial`, `retrying`, `
      How does it stay grounded? What does it do with partial results and missing information?
      How did you test it? -->
 
+
+**Cómo lo pensé: el agente como un harness alrededor del modelo.** El modelo solo interpreta el pedido y redacta la respuesta; lo que lo hace confiable está alrededor, en código:
+- **Herramienta:** una sola, `search_hotels`, con los destinos en lista cerrada y un resultado compacto. El contrato de la herramienta es el de mi API, no el de los proveedores.
+- **Contexto:** la fecha de hoy y los destinos válidos van en las instrucciones. Los resultados de búsquedas viejas se compactan y los mensajes del modelo se guardan enteros.
+- **Guardarraíles:** la API valida los parámetros (un 400 vuelve al modelo como error de la herramienta), el agente corta después de 3 llamadas a la herramienta, y la verificación de precios y hoteles y el pie con el estado de los proveedores los hace el código, no el modelo.
+- **Manejo de errores:** reintentos con tope de 20 s, respuesta vacía y cuota agotada con un mensaje claro.
+- **Evals:** 5 casos fijos con la fecha de hoy fija, para detectar si un cambio de modelo o de instrucciones empeora algo.
+
 **Modelo:** `gemini-3.5-flash`. Tiene capa gratuita sin tarjeta, soporta llamar herramientas (lo comprobé con una prueba) y alcanza para una sola herramienta con parámetros simples. Probé antes `gemini-2.5-flash` (ya no está disponible para cuentas nuevas) y `gemini-3.8-flash` (503 por demanda). El modelo se configura con `GEMINI_MODEL` y queda detrás de una capa chica (`llm.ts`, `fetch` directo, sin SDK). Cambiar de proveedor no es tocar un solo archivo: además de `llm.ts`, cambia cómo `agent.ts` guarda el historial, que usa el formato de Gemini (`role: "model"`, `functionCall`, `functionResponse`). La mejora sería un formato de mensajes neutral que `llm.ts` traduzca a cada proveedor. Alternativas que consideré: Groq (más rápido, solo modelos abiertos) y DeepSeek (requiere saldo). **Límite real de la capa gratuita:** se agotó con pocas decenas de pedidos en una sesión de desarrollo (evals y pruebas); después Gemini respondió 429 pidiendo esperar unos 55 minutos.
 
 **Reintentos y fallas de Gemini:** ante 503 o 429 reintenta hasta 3 veces, esperando lo que pide Gemini o 1, 2 y 4 s, y avisa cada reintento ("Gemini ocupado, reintento en 1 s…"). Nunca espera más de 20 s: si la cuota pide más, falla en el momento con un mensaje claro. Antes de ese límite, una cuota agotada dejaba el CLI 55 minutos en silencio y parecía colgado. Si el modelo devuelve una respuesta vacía (sin texto ni llamada a la herramienta), avisa y reintenta una vez; si se repite, mensaje claro. Mientras espera al modelo muestra "Pensando…". La clave nunca aparece en mensajes ni logs.
@@ -201,6 +209,7 @@ Un 400 de la API vuelve al modelo como error de la herramienta; si la API no est
 
 <!-- What you'd do with more time, what production would need, debt you took on deliberately. -->
 
+- **Por qué un solo agente y no varios.** La tarea es una secuencia corta (entender el pedido, buscar, responder) con una única herramienta. Separarla en agentes (uno que interpreta, otro que busca, otro que verifica) sumaría llamadas al modelo y latencia, y gastaría un cupo que ya se me agotó una vez, sin resolver el problema. La verificación la hace código determinista y no un segundo modelo. Lo reconsideraría si el agente tuviera que reservar, comparar contra otras fuentes o hacer tareas largas.
 - **Ejecución durable:** el sistema solo consulta, así que repetir una búsqueda es seguro. Con reservas haría falta persistir estado e idempotency keys.
 - **Varias instancias:** el límite de 5 pedidos por segundo de C es global. Con más de una copia de la API habría que compartir ese contador.
 - **Confirmación de precio al reservar:** el precio mostrado es indicativo.
