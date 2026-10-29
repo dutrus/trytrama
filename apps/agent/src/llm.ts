@@ -113,13 +113,13 @@ export function createGemini(opts: GeminiOptions = {}): Llm {
 
 async function readStream(body: ReadableStream<Uint8Array>, onText: (text: string) => void): Promise<Part[]> {
   const parts: Part[] = [];
-  const reader = body.pipeThrough(new TextDecoderStream()).getReader();
+  const reader = body.getReader(), decoder = new TextDecoder();
   let buffer = "";
   try {
     for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
-      buffer += value;
+      buffer += decoder.decode(value, { stream: true });
       let nl = buffer.indexOf("\n");
       while (nl >= 0) {
         const line = buffer.slice(0, nl).replace(/\r$/, "");

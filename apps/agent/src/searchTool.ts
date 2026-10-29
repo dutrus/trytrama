@@ -197,12 +197,12 @@ function statusLine(s: Json, cheapest: number): string {
 
 /** Parses an SSE stream into events as they arrive. */
 export async function* readSse(body: ReadableStream<Uint8Array>): AsyncGenerator<{ event: string; data: Json }> {
-  const reader = body.pipeThrough(new TextDecoderStream()).getReader();
+  const reader = body.getReader(), decoder = new TextDecoder();
   let buffer = "";
   for (;;) {
     const { value, done } = await reader.read();
     if (done) return;
-    buffer += value;
+    buffer += decoder.decode(value, { stream: true });
     let end = buffer.indexOf("\n\n");
     while (end >= 0) {
       const block = buffer.slice(0, end);
