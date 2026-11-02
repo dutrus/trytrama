@@ -6,6 +6,9 @@ a streaming search API that unifies them, and a small agent that uses it.
 
 👉 **The assignment is in [`docs/CHALLENGE.md`](docs/CHALLENGE.md).** Start there.
 
+> **Documentos de este trabajo:** [Diseño](docs/DESIGN.md) · [Diseño, versión detallada](docs/DESIGN-detalle.md) · [Cómo usé la IA](AI_LOG.md)
+
+
 ## Requirements
 
 - [Bun](https://bun.sh) **>= 1.2** (tested with 1.3). Nothing else: no Docker, no accounts, no databases.
